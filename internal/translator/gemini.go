@@ -185,8 +185,14 @@ var remoteMediaClient = &http.Client{
 	Timeout: 8 * time.Second,
 }
 
+func isGoogleFileURI(rawURL string) bool {
+	return strings.Contains(rawURL, "generativelanguage.googleapis.com") ||
+		strings.Contains(rawURL, "cloudcode-pa.googleapis.com") ||
+		strings.HasPrefix(rawURL, "files/")
+}
+
 func fetchRemoteMediaInlineData(rawURL string) *GeminiInlineData {
-	if strings.Contains(rawURL, "generativelanguage.googleapis.com") || strings.Contains(rawURL, "cloudcode-pa.googleapis.com") {
+	if isGoogleFileURI(rawURL) {
 		return nil
 	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)

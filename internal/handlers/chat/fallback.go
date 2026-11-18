@@ -969,6 +969,12 @@ func (h *ChatHandler) tryForwardWithConnection(f forwardRequestParams) error {
 		pipedBody = sanitizeOutboundToolSchemas(pipedBody, provider)
 	}
 
+	// Gemini OpenAI-compatible endpoint strictly rejects parameters it doesn't support
+	// (frequency_penalty, presence_penalty, logit_bias, logprobs, top_logprobs).
+	if provider == "gemini" || (providerCfg != nil && providerCfg.IsGeminiOpenAICompat()) {
+		pipedBody = executor.SanitizeGeminiOpenAICompatBody(pipedBody)
+	}
+
 	start := time.Now()
 	metrics := &streamMetrics{}
 	var fwdErr error

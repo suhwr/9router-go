@@ -109,6 +109,31 @@ func renameMaxTokensBody(body []byte) []byte {
 	return out
 }
 
+// SanitizeGeminiOpenAICompatBody removes parameters rejected by Google's
+// /v1beta/openai/chat/completions endpoint (frequency_penalty, presence_penalty,
+// logit_bias, logprobs, top_logprobs).
+func SanitizeGeminiOpenAICompatBody(body []byte) []byte {
+	var m map[string]jsontext.Value
+	if err := json.Unmarshal(body, &m); err != nil {
+		return body
+	}
+	changed := false
+	for _, key := range []string{"frequency_penalty", "presence_penalty", "logit_bias", "logprobs", "top_logprobs"} {
+		if _, ok := m[key]; ok {
+			delete(m, key)
+			changed = true
+		}
+	}
+	if !changed {
+		return body
+	}
+	out, err := marshalStable(m)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
 // volcengineArkGLM5OutputCeiling is Volcengine Ark's output-token ceiling for
 // GLM-5 models. Ark answers HTTP 400 for a GLM-5 request that asks for more
 // than this, so a client budget above it is folded down before dispatch.
@@ -297,6 +322,9 @@ func ForwardOpenAI(w http.ResponseWriter, req *Request) error {
 		// down before the request leaves the upstream. The ceiling is the model's
 		// declared maxOutput from the capability registry, capped at Ark's 4096.
 		req.Body = clampVolcengineArkGLM5OutputTokens(req.Provider, req.Body)
+	}
+	if req.Provider == "gemini" || (req.Config != nil && req.Config.IsGeminiOpenAICompat()) {
+		req.Body = SanitizeGeminiOpenAICompatBody(req.Body)
 	}
 	resp, err := proxy.ForwardOpenAI(req.Ctx, req.Client, req.Config, req.APIKey, req.Body, req.IsStream)
 	if err != nil {

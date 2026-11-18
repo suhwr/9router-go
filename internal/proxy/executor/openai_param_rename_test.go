@@ -43,3 +43,29 @@ func TestRenameMaxTokensBody(t *testing.T) {
 		t.Errorf("unparsable body changed: %s", got)
 	}
 }
+
+func TestSanitizeGeminiOpenAICompatBody(t *testing.T) {
+	in := []byte(`{"model":"gemini-3.8-flash","messages":[{"role":"user","content":"hi"}],"frequency_penalty":0.5,"presence_penalty":0.3,"logit_bias":{"1":2},"logprobs":true,"top_logprobs":5,"temperature":0.7}`)
+	out := SanitizeGeminiOpenAICompatBody(in)
+
+	var m map[string]jsontext.Value
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("sanitized body does not parse: %v", err)
+	}
+	for _, key := range []string{"frequency_penalty", "presence_penalty", "logit_bias", "logprobs", "top_logprobs"} {
+		if _, exists := m[key]; exists {
+			t.Errorf("expected %s to be stripped", key)
+		}
+	}
+	if string(m["model"]) != `"gemini-3.8-flash"` {
+		t.Errorf("model changed: %s", m["model"])
+	}
+	if string(m["temperature"]) != "0.7" {
+		t.Errorf("temperature changed: %s", m["temperature"])
+	}
+
+	untouched := []byte(`{"model":"gemini-3.8-flash","messages":[]}`)
+	if got := SanitizeGeminiOpenAICompatBody(untouched); string(got) != string(untouched) {
+		t.Errorf("body without unsupported fields changed: %s", got)
+	}
+}
