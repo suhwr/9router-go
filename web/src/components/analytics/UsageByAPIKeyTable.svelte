@@ -11,6 +11,7 @@
    * stats read, because the stats endpoint groups by a different dimension
    * entirely and cannot answer this question.
    */
+  import { Loader2 } from 'lucide-svelte'
   import { api, normalizeLastError, type UsageByAPIKeyItem } from '../../api/client'
   import { fmtTokens } from '../../lib/compactNumber'
   import { costIn } from '../../lib/currency.svelte'
@@ -118,7 +119,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center gap-2 py-8 text-text-muted text-sm font-body">
-      <span class="material-symbols-outlined animate-spin text-[20px]" aria-hidden="true">progress_activity</span>
+      <Loader2 class="size-5 animate-spin text-brand-500" />
       Loading API key usage...
     </div>
   {:else if failed}

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Details-section dashboard (issue #280): activity heatmap and node health
   // above the request-details table.
+  import { Loader2 } from 'lucide-svelte'
   import { api, type UsageDashboardResponse, type UsageLifetime } from '../../api/client'
   import { cachedUsageDashboard, rememberUsageDashboard } from '../../lib/usageDashboardCache'
   import { fmtTokens } from '../../lib/compactNumber'
@@ -151,7 +152,7 @@
   {:else if loading}
     <Card padding="md">
       <div class="flex items-center justify-center gap-2 py-8 text-text-muted text-sm">
-        <span class="material-symbols-outlined animate-spin text-[20px]" aria-hidden="true">progress_activity</span>
+        <Loader2 class="size-5 animate-spin text-brand-500" />
         Loading dashboard...
       </div>
     </Card>

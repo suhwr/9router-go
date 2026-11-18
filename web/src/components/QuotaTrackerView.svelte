@@ -6,6 +6,7 @@
   // bulk turn off empty / on available, quota hide/show via settings,
   // and per-connection refresh/toggle/delete actions.
   import { onMount } from 'svelte'
+  import { Loader2 } from 'lucide-svelte'
   import ClaudeCacheTtl from './quota/ClaudeCacheTtl.svelte'
   import {
     api,
@@ -1573,10 +1574,8 @@
           <!-- Card body: quota rows -->
           <div class="px-2 py-1.5">
             {#if isLoading}
-              <div class="py-5 text-center text-text-muted">
-                <span class="material-symbols-outlined text-[28px] animate-spin">
-                  progress_activity
-                </span>
+              <div class="py-5 flex items-center justify-center text-text-muted">
+                <Loader2 class="size-6 text-brand-500 animate-spin" />
               </div>
             {:else if error}
               <div class="py-5 text-center">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Loader2 } from 'lucide-svelte'
   import { matchMemberRow, parseMember, sameProvider } from './comboMatch'
   import type { ActiveRequestItem, RecentRequestItem } from './types'
 
@@ -210,7 +211,7 @@
                 {:else if step.status === 'failed'}
                   <span class="material-symbols-outlined cf-ico">cancel</span>
                 {:else if step.status === 'trying'}
-                  <span class="material-symbols-outlined cf-ico cf-spin">progress_activity</span>
+                  <Loader2 class="w-3.5 h-3.5 animate-spin text-brand-500 inline-block align-middle" />
                 {:else}
                   <span class="material-symbols-outlined cf-ico">radio_button_unchecked</span>
                 {/if}

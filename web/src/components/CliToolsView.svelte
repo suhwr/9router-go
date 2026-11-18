@@ -582,19 +582,19 @@
   }
 </script>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-3.5">
   <!-- PAGE HEADER & FILTERS -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-    <div class="space-y-1">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
+    <div class="space-y-0.5">
       <div class="flex items-center gap-2">
-        <div class="p-2 rounded-lg bg-brand-500/10 text-brand-500">
-          <Terminal class="w-5 h-5" />
+        <div class="p-1.5 rounded-lg bg-brand-500/10 text-brand-500">
+          <Terminal class="w-4 h-4" />
         </div>
         <div>
-          <h1 class="font-headline text-2xl sm:text-3xl font-bold text-text-main tracking-tight flex items-center gap-2">
+          <h1 class="font-headline text-base sm:text-lg font-bold text-text-main tracking-tight flex items-center gap-2">
             CLI & IDE Tools
           </h1>
-          <p class="font-body text-xs sm:text-sm text-text-muted">
+          <p class="font-body text-xs text-text-muted">
             Configure Cursor, Claude Code, Cline, and terminal agents to connect to 9router-go
           </p>
         </div>
@@ -605,10 +605,10 @@
       type="button"
       onclick={loadStatuses}
       disabled={isLoading}
-      class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-semibold text-xs border border-border transition cursor-pointer self-start sm:self-auto"
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-semibold text-xs border border-border transition cursor-pointer self-start sm:self-auto shrink-0"
     >
       <RefreshCw class="w-3.5 h-3.5 {isLoading ? 'animate-spin text-brand-500' : 'text-text-muted'}" />
-      <span>Scan Installed Tools</span>
+      <span>Scan Installed</span>
     </button>
   </div>
 

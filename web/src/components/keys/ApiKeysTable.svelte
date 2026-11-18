@@ -620,10 +620,10 @@
          card header. It is the one action an operator takes after reading the
          list, so it belongs where the reading ends rather than where it begins,
          and on a phone the header is the first thing to scroll away. -->
-    <div class="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 p-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-border bg-surface-2/50 p-2 sm:p-2.5">
       <div class="relative flex-1 min-w-0">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle pointer-events-none" aria-hidden="true">
-          <Search class="w-4 h-4" />
+          <Search class="w-3.5 h-3.5" />
         </span>
         <input
           type="text"
@@ -631,54 +631,49 @@
           oninput={(e) => (searchTerm = e.currentTarget.value)}
           placeholder="Search keys or tokens..."
           aria-label="Search keys"
-          class="w-full pl-9 pr-3 py-1.5 rounded-lg bg-bg border border-border font-mono text-xs text-text-main placeholder:text-text-subtle focus:outline-none focus:border-brand-500/50 transition-colors"
+          class="w-full pl-8.5 pr-3 py-1.5 rounded-lg bg-bg border border-border font-mono text-xs text-text-main placeholder:text-text-subtle focus:outline-none focus:border-brand-500/50 transition-colors"
         />
       </div>
-      <label class="flex items-center gap-1.5 rounded-lg border border-border bg-bg px-2.5 py-1.5 text-xs shrink-0">
-        <span class="text-text-subtle">Sort</span>
-        <select
-          value={sortKey}
-          onchange={(e) => (sortKey = e.currentTarget.value as 'newest' | 'name' | 'requests')}
-          aria-label="Sort keys"
-          class="bg-transparent border-0 p-0 text-xs font-medium text-text-main focus:outline-none cursor-pointer"
-        >
-          <option value="newest">Newest</option>
-          <option value="name">Name</option>
-          <option value="requests">Requests</option>
-        </select>
-      </label>
-      {#if isFiltered}
+      <div class="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+        <label class="flex items-center gap-1.5 rounded-lg border border-border bg-bg px-2.5 py-1.5 text-xs shrink-0">
+          <span class="text-text-subtle">Sort</span>
+          <select
+            value={sortKey}
+            onchange={(e) => (sortKey = e.currentTarget.value as 'newest' | 'name' | 'requests')}
+            aria-label="Sort keys"
+            class="bg-transparent border-0 p-0 text-xs font-medium text-text-main focus:outline-none cursor-pointer"
+          >
+            <option value="newest">Newest</option>
+            <option value="name">Name</option>
+            <option value="requests">Requests</option>
+          </select>
+        </label>
+        {#if isFiltered}
+          <button
+            type="button"
+            onclick={() => {
+              searchTerm = ''
+              activePill = 'off'
+              requestsPill = 'off'
+              tokensPill = 'off'
+              unusedPill = 'off'
+            }}
+            class="shrink-0 rounded-lg px-2.5 py-1.5 text-xs text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+        {/if}
         <button
           type="button"
-          onclick={() => {
-            searchTerm = ''
-            activePill = 'off'
-            requestsPill = 'off'
-            tokensPill = 'off'
-            unusedPill = 'off'
-          }}
-          class="shrink-0 rounded-lg px-2.5 py-1.5 text-xs text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer"
+          onclick={() => onCreate?.()}
+          aria-label="Create Key"
+          class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition cursor-pointer"
         >
-          Clear
+          <Plus class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Create Key</span>
+          <span class="sm:hidden" aria-hidden="true">New</span>
         </button>
-      {/if}
-      <button
-        type="button"
-        onclick={() => onCreate?.()}
-        aria-label="Create Key"
-        class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition cursor-pointer"
-      >
-        <Plus class="w-3.5 h-3.5" />
-        <!-- One label, not a responsive pair. "Create Key" on desktop and
-             "New" on a phone gave the same control two accessible names, so
-             getByRole('button', {name: 'Create Key'}) — what the e2e suite and
-             any screen-reader user addresses it by — matched nothing below sm.
-             aria-label pins one name at every width; the visible text is
-             shortened with CSS, which changes what is read off the screen
-             without changing what the control is called. -->
-        <span class="hidden sm:inline">Create Key</span>
-        <span class="sm:hidden" aria-hidden="true">New</span>
-      </button>
+      </div>
     </div>
 
     <!-- Batch bar. It sits directly under the search row, above the list it

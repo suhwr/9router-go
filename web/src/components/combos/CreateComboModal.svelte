@@ -6,6 +6,7 @@
     Eye,
     GripVertical,
     Layers,
+    Loader2,
     Plus,
     X
   } from 'lucide-svelte'
@@ -679,7 +680,7 @@
             title={models.length === 0 ? "No models to test" : isTestingDraft ? "Testing draft models..." : "Test draft models (Dead/Alive check)"}
           >
             {#if isTestingDraft}
-              <span class="material-symbols-outlined animate-spin text-[12px] text-brand-500 shrink-0">progress_activity</span>
+              <Loader2 class="size-3.5 text-brand-500 animate-spin shrink-0" />
             {:else}
               <span class="material-symbols-outlined text-[13px] shrink-0">play_circle</span>
             {/if}
@@ -742,7 +743,7 @@
                     title={res ? (res.ok ? `Alive · ${res.latencyMs}ms` : `Dead · ${res.error || 'Failed'}`) : isModelActive ? 'Testing...' : 'Click to edit'}
                   >
                     {#if isModelActive}
-                      <span class="material-symbols-outlined animate-spin text-[12px] text-brand-500">progress_activity</span>
+                      <Loader2 class="size-3 text-brand-500 animate-spin shrink-0" />
                     {:else if res}
                       <span class="material-symbols-outlined text-[13px] {res.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
                         {res.ok ? 'check_circle' : 'cancel'}
@@ -761,24 +762,24 @@
               {#if caps.reasoning}
                 <Brain class="w-3 h-3 text-amber-500 shrink-0" title="Reasoning — Supports reasoning / thinking" />
               {/if}
-              <div class="flex shrink-0 items-center gap-0.5">
+              <div class="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
                   onclick={() => moveModel(idx, -1)}
                   disabled={idx === 0}
-                  class="p-0.5 rounded {idx === 0 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer'}"
+                  class="size-7 sm:size-6 flex items-center justify-center rounded-md border border-border/60 bg-surface-2 transition-colors {idx === 0 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
                   title="Move up"
                 >
-                  <ArrowUp class="w-3 h-3" />
+                  <ArrowUp class="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
                   onclick={() => moveModel(idx, 1)}
                   disabled={idx === models.length - 1}
-                  class="p-0.5 rounded {idx === models.length - 1 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer'}"
+                  class="size-7 sm:size-6 flex items-center justify-center rounded-md border border-border/60 bg-surface-2 transition-colors {idx === models.length - 1 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
                   title="Move down"
                 >
-                  <ArrowDown class="w-3 h-3" />
+                  <ArrowDown class="w-3.5 h-3.5" />
                 </button>
               </div>
               <button

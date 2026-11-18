@@ -70,24 +70,24 @@
   )
 </script>
 
-<div class="flex flex-col gap-8 animate-fade-in">
+<div class="flex flex-col gap-5 sm:gap-6 animate-fade-in">
   <!-- Search / Filter Bar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="relative flex-1 max-w-md">
-      <Search class="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div class="relative flex-1 max-w-sm">
+      <Search class="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
       <input
         type="text"
         bind:value={searchQuery}
         placeholder="Search providers..."
-        class="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl bg-surface border border-border text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors"
+        class="w-full pl-8.5 pr-3 py-1.5 text-xs rounded-lg bg-surface border border-border text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
     <select
       bind:value={statusFilter}
-      class="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-text-main outline-none transition-colors hover:border-brand-500/40 cursor-pointer"
+      class="h-8 rounded-lg border border-border bg-surface px-2.5 text-xs text-text-main outline-none transition-colors hover:border-brand-500/40 cursor-pointer"
     >
-      <option value="all">All</option>
+      <option value="all">All Status</option>
       <option value="connected">Connected</option>
       <option value="error">Error</option>
       <option value="disabled">Disabled</option>
@@ -96,18 +96,19 @@
   </div>
 
   <!-- 1. Custom Providers -->
-  <div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <h2 class="text-lg sm:text-xl font-semibold leading-tight text-text-main">
-        Custom Providers (OpenAI, Anthropic, Embedding)
+  <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <h2 class="text-sm sm:text-base font-semibold text-text-main flex items-center gap-1.5">
+        <span>Custom Providers</span>
+        <span class="text-xs font-normal text-text-muted">({customNodes.length})</span>
       </h2>
-      <div class="flex flex-col gap-2 sm:flex-row sm:w-auto">
+      <div class="flex items-center gap-2">
         <Button size="sm" onclick={onAddCustom} class="w-full sm:w-auto">
-          <Plus class="w-4 h-4 mr-1" /> Add Custom Provider
+          <Plus class="w-3.5 h-3.5 mr-1" /> Add Custom
         </Button>
         {#if onImport}
           <Button size="sm" variant="secondary" onclick={onImport} class="w-full sm:w-auto">
-            <Download class="w-4 h-4 mr-1" /> Import
+            <Download class="w-3.5 h-3.5 mr-1" /> Import
           </Button>
         {/if}
       </div>
@@ -116,10 +117,10 @@
     {#if customNodes.length === 0}
       <div class="flex items-center justify-center gap-2 py-4 border border-dashed border-border rounded-xl text-text-muted text-xs">
         <Server class="w-4 h-4" />
-        <span>No custom providers — use “Add Custom Provider” to register an OpenAI, Anthropic, or embedding endpoint</span>
+        <span>No custom providers — use “Add Custom” to register an endpoint</span>
       </div>
     {:else}
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {#each customNodes as node (node.id)}
           <ProviderCard
             id={node.id}
@@ -136,14 +137,14 @@
 
   <!-- 2. OAuth Providers -->
   {#if oauthProviders.length > 0}
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-lg sm:text-xl font-semibold leading-tight text-text-main">OAuth Providers</h2>
-        <Button size="sm" variant="outline" class="text-xs w-full sm:w-auto text-text-muted hover:text-text-main" onclick={() => alert('Testing OAuth connections...')}>
-          <Play class="w-3.5 h-3.5 mr-1 text-text-muted" /> Test All
-        </Button>
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm sm:text-base font-semibold text-text-main flex items-center gap-1.5">
+          <span>OAuth Providers</span>
+          <span class="text-xs font-normal text-text-muted">({oauthProviders.length})</span>
+        </h2>
       </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {#each oauthProviders as p (p.id)}
           <ProviderCard
             id={p.id}
@@ -159,14 +160,14 @@
 
   <!-- 3. Free Tier Providers -->
   {#if freeTierProviders.length > 0}
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-lg sm:text-xl font-semibold leading-tight text-text-main">Free Tier Providers</h2>
-        <Button size="sm" variant="outline" class="text-xs w-full sm:w-auto text-text-muted hover:text-text-main" onclick={() => alert('Testing Free Tier connections...')}>
-          <Play class="w-3.5 h-3.5 mr-1 text-text-muted" /> Test All
-        </Button>
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm sm:text-base font-semibold text-text-main flex items-center gap-1.5">
+          <span>Free Tier Providers</span>
+          <span class="text-xs font-normal text-text-muted">({freeTierProviders.length})</span>
+        </h2>
       </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {#each freeTierProviders as p (p.id)}
           <ProviderCard
             id={p.id}
@@ -183,14 +184,14 @@
 
   <!-- 4. API Key Providers -->
   {#if apikeyProviders.length > 0}
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-lg sm:text-xl font-semibold leading-tight text-text-main">API Key Providers</h2>
-        <Button size="sm" variant="outline" class="text-xs w-full sm:w-auto text-text-muted hover:text-text-main" onclick={() => alert('Testing API Key connections...')}>
-          <Play class="w-3.5 h-3.5 mr-1 text-text-muted" /> Test All
-        </Button>
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm sm:text-base font-semibold text-text-main flex items-center gap-1.5">
+          <span>API Key Providers</span>
+          <span class="text-xs font-normal text-text-muted">({apikeyProviders.length})</span>
+        </h2>
       </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {#each visibleApikeyProviders as p (p.id)}
           <ProviderCard
             id={p.id}
@@ -205,7 +206,7 @@
         <button
           type="button"
           onclick={() => (showAllApikey = true)}
-          class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-xs font-medium text-text-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors cursor-pointer"
+          class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-xs font-medium text-text-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors cursor-pointer"
         >
           Show all {apikeyProviders.length} providers
         </button>

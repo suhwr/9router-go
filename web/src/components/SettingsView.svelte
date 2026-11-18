@@ -59,19 +59,19 @@
   }
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4">
   <!-- Page header -->
-  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-    <div class="space-y-1.5">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
+    <div class="space-y-0.5">
       <div class="flex items-center gap-2">
         <span class="font-code text-[10px] uppercase tracking-wider text-brand-500 px-2 py-0.5 rounded bg-brand-500/10 border border-brand-500/25 font-bold">
           System Control
         </span>
       </div>
-      <h1 class="font-headline text-2xl sm:text-3xl font-bold text-text-main tracking-tight">
-        Local Mode & Gateway Configuration
+      <h1 class="font-headline text-base sm:text-lg font-bold text-text-main tracking-tight">
+        Gateway & System Settings
       </h1>
-      <p class="font-body text-xs sm:text-sm text-text-muted max-w-2xl leading-relaxed">
+      <p class="font-body text-xs text-text-muted max-w-xl">
         Manage persistent SQLite state, master auth credentials, and load routing algorithms.
       </p>
     </div>
@@ -80,44 +80,43 @@
       type="button"
       onclick={handleSave}
       disabled={isSaving}
-      class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-body text-xs font-bold shadow-md shadow-brand-500/25 transition cursor-pointer"
+      class="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-body text-xs font-semibold shadow-xs transition cursor-pointer shrink-0"
     >
       {#if isSaving}
         <Loader2 class="w-3.5 h-3.5 animate-spin" />
       {:else}
         <Save class="w-3.5 h-3.5" />
       {/if}
-      <span>Save System State</span>
+      <span>Save Settings</span>
     </button>
   </div>
 
   <!-- 3 Main Configuration Cards (Stitch Design) -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
     <!-- Card 1: Runtime Storage -->
-    <div class="p-6 rounded-xl bg-surface border border-border space-y-4 shadow-xl flex flex-col justify-between">
-      <div class="space-y-3">
+    <div class="p-4 sm:p-4.5 rounded-xl bg-surface border border-border space-y-3 shadow-xs flex flex-col justify-between">
+      <div class="space-y-2.5">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Database class="w-4 h-4 text-success" />
-            <h3 class="font-headline text-sm font-bold text-text-main">Runtime Storage</h3>
+            <h3 class="font-headline text-xs sm:text-sm font-bold text-text-main">Runtime Storage</h3>
           </div>
           <span class="font-code text-[10px] text-success bg-success/10 px-2 py-0.5 rounded border border-success/20">
             Server managed
           </span>
         </div>
 
-        <div class="p-3 rounded-lg bg-bg border border-border space-y-1 font-code text-xs">
+        <div class="p-2.5 rounded-lg bg-bg border border-border space-y-1 font-code text-xs">
           <div class="text-[10px] text-text-muted uppercase">Default Database Location</div>
           <div class="text-info font-semibold">~/.9router/db/data.sqlite</div>
-          <div class="text-[10px] text-text-subtle pt-1">SQLite WAL • Configurable with DB_PATH or DATA_DIR</div>
-          <div class="text-[10px] text-text-subtle pt-1">No automatic versioned schema migration; initialize a fresh database from a compatible upstream schema.</div>
+          <div class="text-[10px] text-text-subtle pt-0.5">SQLite WAL • Configurable with DB_PATH or DATA_DIR</div>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 pt-2">
+      <div class="flex items-center gap-2 pt-1">
         <button
           type="button"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-body text-xs font-semibold border border-border transition cursor-pointer"
+          class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-body text-xs font-semibold border border-border transition cursor-pointer"
         >
           <Download class="w-3.5 h-3.5 text-info" />
           <span>Download Backup</span>
@@ -125,7 +124,7 @@
 
         <button
           type="button"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-body text-xs font-semibold border border-border transition cursor-pointer"
+          class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main font-body text-xs font-semibold border border-border transition cursor-pointer"
         >
           <Upload class="w-3.5 h-3.5 text-brand-400" />
           <span>Import Backup</span>
@@ -134,18 +133,18 @@
     </div>
 
     <!-- Card 2: Routing Strategy & Token Saver Engines -->
-    <div class="p-6 rounded-xl bg-surface border border-border space-y-4 shadow-xl">
+    <div class="p-4 sm:p-4.5 rounded-xl bg-surface border border-border space-y-3 shadow-xs">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Zap class="w-4 h-4 text-brand-500" />
-          <h3 class="font-headline text-sm font-bold text-text-main">Routing Strategy & Token Saver</h3>
+          <h3 class="font-headline text-xs sm:text-sm font-bold text-text-main">Routing Strategy & Token Saver</h3>
         </div>
         <span class="font-code text-[10px] text-info bg-info/10 px-2 py-0.5 rounded border border-info/20">
           Active Engine
         </span>
       </div>
 
-      <div class="space-y-3 font-body text-xs">
+      <div class="space-y-2 font-body text-xs">
         <!-- RTK -->
         <div class="flex items-center justify-between p-3 rounded-lg bg-bg border border-border">
           <div>

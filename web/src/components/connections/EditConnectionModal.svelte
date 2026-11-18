@@ -333,7 +333,7 @@
         >
           {#if testSpinner}
             <span class="material-symbols-outlined text-sm {isTesting ? 'animate-spin' : ''}">
-              {isTesting ? 'progress_activity' : 'science'}
+              {isTesting ? 'sync' : 'science'}
             </span>
           {/if}
           {isTesting ? 'Testing...' : testLabel}

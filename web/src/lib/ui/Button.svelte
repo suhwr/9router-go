@@ -1,6 +1,7 @@
 <script lang="ts">
   // Port of decolua/9router src/shared/components/Button.js
   import type { Snippet } from 'svelte'
+  import { Loader2 } from 'lucide-svelte'
 
   type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success'
   type Size = 'sm' | 'md' | 'lg'
@@ -62,7 +63,7 @@
   {onclick}
 >
   {#if loading}
-    <span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+    <Loader2 class="animate-spin text-current size-4 shrink-0" />
   {:else if icon}
     <span class="material-symbols-outlined text-[18px]">{icon}</span>
   {/if}

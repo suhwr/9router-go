@@ -110,12 +110,12 @@
   const promptInstruction = `Read this skill and use it: ${mainSkillUrl}`
 </script>
 
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-3.5">
   <!-- Top instruction banner -->
-  <div class="p-5 rounded-[14px] bg-surface border border-border-subtle shadow-[var(--shadow-soft)]">
-    <div class="text-xs font-medium text-text-muted mb-2">Paste this to your AI:</div>
+  <div class="p-3.5 sm:p-4 rounded-xl bg-surface border border-border shadow-xs">
+    <div class="text-xs font-medium text-text-muted mb-1.5">Paste this to your AI:</div>
     <div
-      class="px-3.5 py-2.5 rounded-lg bg-surface-2 border border-border-subtle font-mono text-[12px] text-text-main flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap"
+      class="px-3 py-2 rounded-lg bg-surface-2 border border-border font-mono text-[11px] sm:text-xs text-text-main flex items-center justify-between gap-2.5 flex-wrap sm:flex-nowrap"
     >
       <span class="min-w-0 sm:truncate break-all">{promptInstruction}</span>
       <button
@@ -133,33 +133,33 @@
   </div>
 
   <!-- List of skill cards -->
-  <div class="space-y-3">
+  <div class="space-y-2.5">
     {#each skills as skill (skill.id)}
       {@const rawUrl = getSkillRawUrl(skill.id)}
       {@const isCopied = !!copiedMap[skill.id]}
       <div
-        class="flex flex-col gap-3 p-4 rounded-[14px] border shadow-[var(--shadow-soft)] transition-colors {skill.isEntry
+        class="flex flex-col gap-2 p-3 sm:p-3.5 rounded-xl border shadow-xs transition-colors {skill.isEntry
           ? 'border-brand-500/40 bg-brand-500/5'
-          : 'border-border-subtle bg-surface hover:bg-surface-2'}"
+          : 'border-border bg-surface hover:bg-surface-2'}"
       >
         <!-- Icon box -->
-        <div class="flex items-start gap-3.5">
+        <div class="flex items-start gap-3">
           <div
-            class="size-10 rounded-xl flex items-center justify-center shrink-0 {skill.isEntry
-              ? 'bg-brand-500 text-white shadow-[var(--shadow-warm)]'
+            class="size-8.5 rounded-lg flex items-center justify-center shrink-0 {skill.isEntry
+              ? 'bg-brand-500 text-white shadow-xs'
               : 'bg-brand-500/10 text-brand-600 dark:text-brand-400'}"
           >
-            <span class="material-symbols-outlined text-[20px]">{skill.icon}</span>
+            <span class="material-symbols-outlined text-[18px]">{skill.icon}</span>
           </div>
 
           <!-- Details -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="font-semibold text-sm text-text-main">{skill.name}</h3>
+              <h3 class="font-semibold text-xs sm:text-sm text-text-main">{skill.name}</h3>
 
               {#if skill.isEntry}
                 <span
-                  class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30"
+                  class="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30"
                 >
                   START HERE
                 </span>
@@ -167,16 +167,14 @@
 
               {#if skill.endpoint}
                 <code
-                  class="px-2 py-0.5 rounded text-[11px] font-mono bg-surface-3 text-text-muted border border-border-subtle"
+                  class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-surface-3 text-text-muted border border-border"
                 >
                   {skill.endpoint}
                 </code>
               {/if}
             </div>
 
-            <p class="text-xs text-text-muted mt-1 leading-relaxed">{skill.description}</p>
-
-            <span class="text-[11px] text-text-muted mt-2 block break-all">{rawUrl}</span>
+            <p class="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-relaxed">{skill.description}</p>
           </div>
         </div>
 
@@ -186,7 +184,7 @@
             href={getSkillBlobUrl(skill.id)}
             target="_blank"
             rel="noreferrer"
-            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border-subtle bg-surface-2 hover:bg-surface-3 text-text-main text-[11px] font-medium transition-colors"
+            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface-3 text-text-main text-[11px] font-medium transition-colors"
           >
             <span class="material-symbols-outlined text-[14px]">open_in_new</span>
             <span>Open in new tab</span>
@@ -194,7 +192,7 @@
           <button
             type="button"
             onclick={() => handleCopy(skill.id, rawUrl)}
-            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-[11px] font-medium transition-colors cursor-pointer"
+            class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-[11px] font-medium transition-colors cursor-pointer"
             title={rawUrl}
           >
             <span class="material-symbols-outlined text-[14px]">
@@ -208,7 +206,7 @@
   </div>
 
   <!-- Bottom card: More on GitHub -->
-  <div class="p-5 rounded-[14px] bg-surface border border-border-subtle shadow-[var(--shadow-soft)]">
+  <div class="p-3.5 sm:p-4 rounded-xl bg-surface border border-border shadow-xs">
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div>
         <h2 class="text-sm font-semibold text-text-main">More on GitHub</h2>

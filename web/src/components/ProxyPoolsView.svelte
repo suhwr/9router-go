@@ -864,7 +864,7 @@
             label={healthChecking
               ? `Testing ${healthProgress.current}/${healthProgress.total}`
               : 'Test All'}
-            icon={healthChecking ? 'progress_activity' : 'speed'}
+            icon={healthChecking ? 'sync' : 'speed'}
             disabled={healthChecking || proxyPools.length === 0}
             onSelect={() => handleHealthCheck(true)}
           />
@@ -969,7 +969,7 @@
                 class="material-symbols-outlined text-[18px]"
                 style={healthChecking ? 'animation: spin 1s linear infinite' : undefined}
               >
-                {healthChecking ? 'progress_activity' : 'health_and_safety'}
+                {healthChecking ? 'sync' : 'health_and_safety'}
               </span>
               {healthChecking
                 ? `Checking ${healthProgress.current}/${healthProgress.total}`
@@ -1114,7 +1114,7 @@
                     class="material-symbols-outlined text-[18px]"
                     style={testingId === pool.id ? 'animation: spin 1s linear infinite' : undefined}
                   >
-                    {testingId === pool.id ? 'progress_activity' : 'science'}
+                    {testingId === pool.id ? 'sync' : 'science'}
                   </span>
                 </button>
                 <button

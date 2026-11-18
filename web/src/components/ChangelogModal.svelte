@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Loader2 } from 'lucide-svelte'
   import { api } from '../api/client'
   import { marked } from 'marked'
 
@@ -103,9 +104,7 @@
       <div class="p-6 overflow-y-auto flex-1 custom-scrollbar">
         {#if loading}
           <div class="flex flex-col items-center justify-center py-16 text-text-muted gap-3">
-            <span class="material-symbols-outlined animate-spin text-[32px] text-primary">
-              progress_activity
-            </span>
+            <Loader2 class="size-8 text-primary animate-spin" />
             <p class="text-sm font-medium">Loading change log...</p>
           </div>
         {:else if error}

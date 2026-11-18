@@ -908,32 +908,31 @@
 
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4">
   <!-- No page header: the TopBar already carries the page title and description. -->
   {#if loading}<span class="text-xs text-text-subtle">Loading…</span>{/if}
 
-  <!-- Summary strip: label above, number below, description last — the same
-       reading order SecurityPanel uses, so the two pages scan identically. -->
-  <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-    <div class="rounded-[14px] border border-border-subtle bg-surface p-4 shadow-[var(--shadow-soft)]">
+  <!-- Summary strip: label above, number below, description last -->
+  <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+    <div class="rounded-xl border border-border bg-surface p-3 sm:p-3.5 shadow-xs">
       <div class="font-code text-[10px] uppercase tracking-wider text-text-subtle">Presets</div>
-      <div class="mt-1 text-2xl font-semibold text-text-main">{presets.length}</div>
-      <p class="mt-1 text-xs text-text-muted">Prompt presets in the library</p>
+      <div class="mt-0.5 text-xl font-bold text-text-main">{presets.length}</div>
+      <p class="mt-0.5 text-[11px] text-text-muted">Prompt presets in the library</p>
     </div>
-    <div class="rounded-[14px] border border-border-subtle bg-surface p-4 shadow-[var(--shadow-soft)]">
+    <div class="rounded-xl border border-border bg-surface p-3 sm:p-3.5 shadow-xs">
       <div class="font-code text-[10px] uppercase tracking-wider text-text-subtle">Bindings armed</div>
-      <div class="mt-1 text-2xl font-semibold text-text-main">
+      <div class="mt-0.5 text-xl font-bold text-text-main">
         {Object.values(models).filter((c) => c.enabled).length}
-        <span class="text-sm font-normal text-text-subtle">/ {Object.keys(models).length}</span>
+        <span class="text-xs font-normal text-text-subtle">/ {Object.keys(models).length}</span>
       </div>
-      <p class="mt-1 text-xs text-text-muted">Exact bindings currently injecting</p>
+      <p class="mt-0.5 text-[11px] text-text-muted">Exact bindings currently injecting</p>
     </div>
-    <div class="rounded-[14px] border border-border-subtle bg-surface p-4 shadow-[var(--shadow-soft)]">
+    <div class="rounded-xl border border-border bg-surface p-3 sm:p-3.5 shadow-xs">
       <div class="font-code text-[10px] uppercase tracking-wider text-text-subtle">Injections</div>
-      <div class="mt-1 text-2xl font-semibold text-text-main">
+      <div class="mt-0.5 text-xl font-bold text-text-main">
         {Object.values(presetUsage).reduce((a, b) => a + b, 0)}
       </div>
-      <p class="mt-1 text-xs text-text-muted">Total prompts prepended, all presets</p>
+      <p class="mt-0.5 text-[11px] text-text-muted">Total prompts prepended, all presets</p>
     </div>
   </div>
   <!-- How it works: read-once reference, so it carries the lightest

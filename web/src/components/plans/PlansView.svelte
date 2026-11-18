@@ -184,28 +184,27 @@
   }
 </script>
 
-<div class="max-w-5xl mx-auto space-y-6">
-  <div class="flex items-start justify-between gap-4 flex-wrap">
+<div class="max-w-5xl mx-auto space-y-4">
+  <div class="flex items-center justify-between gap-3 flex-wrap pb-1 border-b border-border/40">
     <div>
-      <h1 class="text-2xl font-semibold text-text-main">Plans</h1>
-      <p class="text-sm text-text-muted mt-1">
-        Reusable policy templates. A key assigned to a plan inherits its limits as defaults and can
-        still override them individually.
+      <h1 class="text-base sm:text-lg font-semibold text-text-main">Policy Plans</h1>
+      <p class="text-xs text-text-muted mt-0.5">
+        Reusable policy templates. Keys assigned to a plan inherit its rate limits and budgets.
       </p>
     </div>
     <div class="flex items-center gap-2">
       <button
         onclick={load}
-        class="flex items-center gap-2 px-3 py-2 rounded-[10px] border border-border-subtle text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors text-sm"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface-2 text-text-muted hover:text-text-main hover:bg-surface-3 transition-colors text-xs cursor-pointer"
       >
-        <RefreshCw size={16} class={isLoading ? 'animate-spin' : ''} />
+        <RefreshCw size={14} class={isLoading ? 'animate-spin' : ''} />
         Reload
       </button>
       <button
         onclick={openCreate}
-        class="flex items-center gap-2 px-3 py-2 rounded-[10px] bg-primary text-white hover:bg-primary-hover transition-colors text-sm font-medium"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors text-xs font-medium cursor-pointer"
       >
-        <Plus size={16} />
+        <Plus size={14} />
         New plan
       </button>
     </div>

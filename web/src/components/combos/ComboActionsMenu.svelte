@@ -11,6 +11,7 @@
   space below is short — the same mechanics as analytics/SectionMenu.
 -->
 <script lang="ts">
+  import { Loader2, MoreVertical } from 'lucide-svelte'
   import { maxPanelWidth, placePanel, placementStyle } from '../../lib/ui/menuPosition'
   import { portal } from '../../lib/ui/portal'
   import type { Combo } from '../../api/client'
@@ -106,9 +107,11 @@
     onkeydown={onKeydown}
     class="inline-flex h-11 sm:h-8 w-11 sm:w-8 items-center justify-center rounded-lg border border-border bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 cursor-pointer"
   >
-    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
-      {isTesting ? 'progress_activity animate-spin' : 'more_vert'}
-    </span>
+    {#if isTesting}
+      <Loader2 class="w-4 h-4 text-brand-500 animate-spin" />
+    {:else}
+      <MoreVertical class="w-4 h-4" />
+    {/if}
   </button>
 
   {#if open}

@@ -4020,7 +4020,7 @@
                         </span>
                       {:else if connBadge === 'testing'}
                         <span class="inline-flex items-center gap-1.5 rounded-full font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[10px]">
-                          <span class="material-symbols-outlined text-[10px] animate-spin">progress_activity</span>
+                          <span class="material-symbols-outlined text-[10px] animate-spin">sync</span>
                           testing
                         </span>
                       {:else if connBadge === 'error'}
@@ -4201,7 +4201,7 @@
                         class="flex w-full flex-col items-center rounded px-2 py-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-60 {proxyBadge.hasAnyProxy ? 'text-primary' : 'text-text-muted hover:text-primary'} cursor-pointer"
                       >
                         <span class="material-symbols-outlined text-[18px] {updatingProxyConnId === conn.id ? 'animate-spin' : ''}">
-                          {updatingProxyConnId === conn.id ? 'progress_activity' : 'lan'}
+                          {updatingProxyConnId === conn.id ? 'sync' : 'lan'}
                         </span>
                         <span class="text-[10px] leading-tight">Proxy</span>
                       </button>
@@ -4491,7 +4491,7 @@
             title="Test all sends a real completion per model and consumes account quota"
             class="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-border bg-surface-2 px-3 text-xs font-medium text-text-main transition-colors hover:bg-surface-3 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            <span class="material-symbols-outlined text-[16px]">{compatibleTestAllRunning ? 'progress_activity' : 'science'}</span>
+            <span class="material-symbols-outlined text-[16px]">{compatibleTestAllRunning ? 'sync' : 'science'}</span>
             {compatibleTestAllRunning ? `Testing ${compatibleTestSummary.total}/${compatibleRows.length}...` : 'Test all models'}
           </button>
           <button
@@ -4501,7 +4501,7 @@
             title="Remove all deletes this node's imported models and the aliases pointing at them; models that ship with the build stay"
             class="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-border bg-surface-2 px-3 text-xs font-medium text-text-main transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            <span class="material-symbols-outlined text-[16px]">{isRemovingCompatibleModels ? 'progress_activity' : 'delete_sweep'}</span>
+            <span class="material-symbols-outlined text-[16px]">{isRemovingCompatibleModels ? 'sync' : 'delete_sweep'}</span>
             {isRemovingCompatibleModels ? 'Removing...' : 'Remove all models'}
           </button>
           <button
@@ -4620,7 +4620,7 @@
                         class="p-0.5 hover:bg-sidebar rounded text-text-muted hover:text-primary transition-colors cursor-pointer"
                       >
                         <span class="material-symbols-outlined text-sm" style={isTestingRow ? 'animation: spin 1s linear infinite' : undefined}>
-                          {isTestingRow ? 'progress_activity' : 'science'}
+                          {isTestingRow ? 'sync' : 'science'}
                         </span>
                       </button>
                       <span class="pointer-events-none absolute top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
@@ -4897,7 +4897,7 @@
                 title={modelTestErrors[model.id] || (testStatus === 'ok' ? 'Test Passed' : 'Test')}
               >
                 {#if isTestingThis}
-                  <span class="material-symbols-outlined text-sm animate-spin text-primary">progress_activity</span>
+                  <span class="material-symbols-outlined text-sm animate-spin text-primary">sync</span>
                 {:else if testStatus === 'ok'}
                   <span class="material-symbols-outlined text-sm text-green-500">check</span>
                 {:else if testStatus === 'blocked'}
@@ -4984,7 +4984,7 @@
           class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface-3 px-3 py-2 text-xs text-text-main transition-colors sm:w-auto cursor-pointer disabled:opacity-50"
         >
           <span class="material-symbols-outlined text-sm {isImportingLiveCatalogModels ? 'animate-spin' : ''}">
-            {isImportingLiveCatalogModels ? 'progress_activity' : 'download'}
+            {isImportingLiveCatalogModels ? 'sync' : 'download'}
           </span>
           {isImportingLiveCatalogModels
             ? 'Fetching...'
@@ -5002,7 +5002,7 @@
           class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface-3 px-3 py-2 text-xs text-text-main transition-colors sm:w-auto cursor-pointer disabled:opacity-50"
           title="Send a minimal request to every model and mark the ones that fail"
         >
-          <span class="material-symbols-outlined text-sm">{isCheckingAll ? 'progress_activity' : 'troubleshoot'}</span>
+          <span class="material-symbols-outlined text-sm {isCheckingAll ? 'animate-spin' : ''}">{isCheckingAll ? 'sync' : 'troubleshoot'}</span>
           {isCheckingAll
             ? `Checking ${checkAllProgress.done}/${checkAllProgress.total}...`
             : `Check All Models (${visibleModels.length})`}
@@ -5027,7 +5027,7 @@
           class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface-3 px-3 py-2 text-xs text-text-main transition-colors sm:w-auto cursor-pointer disabled:opacity-50"
           title="Fetch the provider's live catalog and list models you have not added yet"
         >
-          <span class="material-symbols-outlined text-sm">{isCheckingLatest ? 'progress_activity' : 'cached'}</span>
+          <span class="material-symbols-outlined text-sm {isCheckingLatest ? 'animate-spin' : ''}">{isCheckingLatest ? 'sync' : 'cached'}</span>
           {isCheckingLatest ? 'Checking...' : 'Check Latest Models'}
         </button>
       {/if}
@@ -5041,7 +5041,7 @@
           title="Re-read the provider's live catalog and clear the Deprecated badge from any model it still serves"
         >
           <span class="material-symbols-outlined text-sm {isSyncingModels ? 'animate-spin' : ''}">
-            {isSyncingModels ? 'progress_activity' : 'sync'}
+            sync
           </span>
           {isSyncingModels ? 'Syncing...' : 'Sync Models'}
         </button>
@@ -5287,7 +5287,7 @@
       {/if}
       {#if providerId !== 'kiro' || kiroMethod || deviceUserCode}
       <div class="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-sidebar/50 mb-4">
-        <span class="material-symbols-outlined text-base text-primary animate-spin">progress_activity</span>
+        <span class="material-symbols-outlined text-base text-primary animate-spin">sync</span>
         <span class="text-sm">
           {providerId === 'freebuff'
             ? 'Waiting for Freebuff authorization… (auto-polling active)'

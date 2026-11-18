@@ -11,6 +11,7 @@
   //
   // The text is fetched from the API rather than duplicated here, so the wording
   // the user reads cannot drift from the version that was recorded.
+  import { Loader2 } from 'lucide-svelte'
   import { api, ApiError } from '../../api/client'
 
   interface Props {
@@ -314,7 +315,7 @@
             Open GitHub and approve
           </a>
           <p class="flex items-center gap-2 text-xs text-text-muted">
-            <span class="material-symbols-outlined animate-spin text-[16px]" aria-hidden="true">progress_activity</span>
+            <Loader2 class="size-4 animate-spin text-brand-500 shrink-0" />
             Waiting for authorisation… {#if waitedSeconds > 45}<span class="text-amber-500">({waitedSeconds}s — make sure you approved code {userCode}, not an earlier one)</span>{/if}
           </p>
           <div class="flex justify-end">

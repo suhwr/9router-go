@@ -595,35 +595,37 @@ async function handleSetContextWindow(combo: Combo, contextWindow: number) {
 
 </script>
 
-<div class="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
+<div class="flex min-w-0 flex-col gap-4 px-1 sm:px-0">
   <CombosHeader onCreateClick={openCreateModal} />
-  <div class="flex flex-wrap items-center justify-end gap-2">
-    <div class="relative w-full sm:w-64">
-      <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div class="relative w-full sm:max-w-xs">
+      <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
       <input
         type="text"
         bind:value={searchQuery}
         placeholder="Search combos…"
         aria-label="Search combos"
-        class="w-full rounded-[10px] border border-transparent bg-surface-2 py-2 pl-9 pr-9 text-sm text-text-main transition-all duration-150 ease-out placeholder-text-muted/70 focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+        class="w-full h-8.5 rounded-lg border border-border bg-surface-2 pl-8.5 pr-8 text-xs text-text-main transition-colors placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
       />
       {#if searchQuery}
         <button
           type="button"
           onclick={() => (searchQuery = '')}
           aria-label="Clear search"
-          class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-2.5 sm:p-1 text-text-muted transition-colors hover:text-text-main"
+          class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-muted hover:text-text-main transition-colors cursor-pointer"
         >
-          <X class="h-4 w-4" />
+          <X class="h-3.5 w-3.5" />
         </button>
       {/if}
     </div>
-    <Button onclick={handleReconcile} variant="ghost" size="sm" loading={isReconciling}>
-      Reconcile rules
-    </Button>
-    {#if reconcileNote}
-      <span class="text-[11px] text-text-muted">{reconcileNote}</span>
-    {/if}
+    <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+      <Button onclick={handleReconcile} variant="ghost" size="sm" loading={isReconciling}>
+        Reconcile rules
+      </Button>
+      {#if reconcileNote}
+        <span class="text-[11px] text-text-muted">{reconcileNote}</span>
+      {/if}
+    </div>
   </div>
 
   <!-- Upstream selection bar: the count is on the checkbox, and the bulk
@@ -717,7 +719,7 @@ async function handleSetContextWindow(combo: Combo, contextWindow: number) {
         </div>
       </Card>
     {:else}
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-2.5">
         {#each filteredCombos as combo (combo.id)}
           <ComboCard
             {combo}

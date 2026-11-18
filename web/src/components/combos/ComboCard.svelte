@@ -6,6 +6,7 @@
     Eye,
     Gavel,
     Layers,
+    Loader2,
     Play,
     SlidersHorizontal,
     Sparkles,
@@ -251,7 +252,7 @@
             title="Test all models in this combo"
           >
             {#if isTesting}
-              <span class="material-symbols-outlined animate-spin text-[14px] text-brand-500">progress_activity</span>
+              <Loader2 class="animate-spin text-brand-500 size-3.5" />
             {:else}
               <Play class="w-3.5 h-3.5 text-brand-500" />
             {/if}
@@ -300,7 +301,7 @@
             title={res ? (res.ok ? `Alive · ${res.latencyMs}ms` : `Dead · ${res.error || 'Failed'}`) : isModelActive ? 'Testing...' : undefined}
           >
             {#if isModelActive}
-              <span class="material-symbols-outlined animate-spin text-[12px] text-brand-500">progress_activity</span>
+              <Loader2 class="animate-spin text-brand-500 size-3 shrink-0" />
             {:else if res}
               <span class="material-symbols-outlined text-[13px] {res.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
                 {res.ok ? 'check_circle' : 'cancel'}
@@ -449,7 +450,7 @@
           class="flex sm:hidden items-center justify-center gap-1.5 h-8 w-full rounded-lg border border-border/70 bg-surface-2 text-xs font-medium text-text-main cursor-pointer disabled:opacity-50"
         >
           {#if isTesting}
-            <span class="material-symbols-outlined animate-spin text-[14px] text-brand-500">progress_activity</span>
+            <Loader2 class="animate-spin text-brand-500 size-3.5 shrink-0" />
           {:else}
             <Play class="w-3.5 h-3.5 text-brand-500" />
           {/if}

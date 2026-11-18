@@ -1132,15 +1132,15 @@
   </Menu>
 {/snippet}
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-4">
   <!-- TOP SECTION: API Endpoint Card -->
-  <Card padding="md" class="space-y-4">
-    <div class="flex items-center gap-2 mb-2">
-      <div class="p-2 rounded-lg bg-brand-500/10 text-brand-500">
-        <Radio class="w-5 h-5" />
+  <Card padding="sm" class="space-y-3">
+    <div class="flex items-center gap-2 mb-1">
+      <div class="p-1.5 rounded-lg bg-brand-500/10 text-brand-500">
+        <Radio class="w-4 h-4" />
       </div>
       <div class="min-w-0 flex-1">
-        <h2 class="text-lg font-semibold text-text-main flex items-center gap-2">
+        <h2 class="text-sm sm:text-base font-semibold text-text-main flex items-center gap-2">
           API Endpoint
         </h2>
         <p class="text-xs text-text-muted">Direct, secure connection points to your local AI router</p>

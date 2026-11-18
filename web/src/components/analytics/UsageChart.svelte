@@ -3,6 +3,7 @@
   // Recent Requests, above the usage breakdown filter). Port of
   // techysy/10router's UsageChart, drawn as plain SVG — the dashboard ships no
   // chart dependency, matching CacheAnalyticsView / CompressionAnalyticsView.
+  import { Loader2 } from 'lucide-svelte'
   import { api } from '../../api/client'
   import { fmtTokens } from '../../lib/compactNumber'
   import { costIn } from '../../lib/currency.svelte'
@@ -213,7 +214,7 @@
 <div class="flex min-w-0 flex-col gap-3">
   {#if loading}
     <div class="flex items-center justify-center py-12 text-text-muted text-xs">
-      <span class="material-symbols-outlined animate-spin text-[20px] mr-2" aria-hidden="true">progress_activity</span>
+      <Loader2 class="size-5 animate-spin mr-2 text-brand-500" />
       Loading chart...
     </div>
   {:else if failed}

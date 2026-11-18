@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Loader2 } from 'lucide-svelte'
   import { api, type SystemVersionInfo } from '../api/client'
   import { marked } from 'marked'
   import { copyToClipboard } from '../lib/clipboard'
@@ -216,7 +217,7 @@
           <div class="p-4 rounded-xl bg-surface-2 border border-border-subtle text-xs text-text-main leading-relaxed max-h-60 overflow-y-auto custom-scrollbar changelog-body">
             {#if isLoadingChangelog}
               <div class="flex items-center justify-center py-6 text-text-muted gap-2">
-                <span class="material-symbols-outlined animate-spin text-[20px] text-primary">progress_activity</span>
+                <Loader2 class="size-5 text-primary animate-spin" />
                 <span>Loading changes...</span>
               </div>
             {:else if releaseNotesHtml}
@@ -249,7 +250,7 @@
 
       {#if updateStatus === 'updating'}
         <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center gap-2 text-xs">
-          <span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+          <Loader2 class="size-4.5 animate-spin shrink-0" />
           <span>{updateMsg}</span>
         </div>
       {:else if updateStatus === 'success'}
