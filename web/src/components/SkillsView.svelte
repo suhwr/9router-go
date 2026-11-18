@@ -10,7 +10,7 @@
     isEntry?: boolean
   }
 
-  const repo = 'luqman-v1/9router-go'
+  const repo = 'suhwr/9router-go'
   const branch = 'main'
   const baseFolder = 'skills'
   const githubRepoUrl = `https://github.com/${repo}`

@@ -1137,7 +1137,7 @@
                 }}
               />
             {/if}
-            <span class="hidden truncate lg:inline">{selectedProviderLabel}</span>
+            <span class="truncate max-w-[130px] sm:max-w-[200px] font-medium">{selectedProviderLabel}</span>
           </span>
           <span class="material-symbols-outlined text-[14px] text-text-muted">expand_more</span>
         </button>
@@ -1150,7 +1150,7 @@
             aria-label="Filter quota providers"
             tabindex="-1"
             style={providerPanelStyle}
-            class="fixed z-50 w-max rounded-xl border border-border bg-surface p-1.5 shadow-[var(--shadow-elev)]"
+            class="fixed z-50 w-[280px] max-w-[90vw] rounded-xl border border-border bg-surface p-1.5 shadow-[var(--shadow-elev)]"
           >
             <button
               type="button"
@@ -1303,30 +1303,35 @@
     </div>
   {:else}
     <!-- Provider groups: collapsible sections, two columns per section -->
-    <div class="space-y-5">
+    <div class="space-y-6">
       {#each groupedConnections as group (group.provider)}
-        <section>
+        <section class="space-y-3">
           <button
             type="button"
             onclick={() => toggleProviderGroup(group.provider)}
             aria-expanded={!groupCollapsed[group.provider]}
-            class="mb-3 flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:text-primary"
+            class="flex w-full items-center justify-between rounded-xl border border-border-subtle/80 bg-surface-2/70 px-3.5 py-2.5 text-left transition-all hover:bg-surface-2 hover:border-border cursor-pointer shadow-xs"
           >
-            <span
-              class="material-symbols-outlined text-lg text-text-muted transition-transform {groupCollapsed[
-                group.provider
-              ]
-                ? ''
-                : 'rotate-90'}"
-            >
-              chevron_right
-            </span>
-            <img src={getIconPath(group.provider)} alt="" class="h-5 w-5 rounded" />
-            <span class="text-sm font-semibold text-text-main">{providerLabel(group.provider)}</span>
-            <span
-              class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-muted"
-            >
-              {group.connections.length}
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span
+                class="material-symbols-outlined text-lg text-text-muted transition-transform duration-200 {groupCollapsed[
+                  group.provider
+                ]
+                  ? ''
+                  : 'rotate-90'}"
+              >
+                chevron_right
+              </span>
+              <img src={getIconPath(group.provider)} alt="" class="size-5 rounded object-contain shrink-0" />
+              <span class="text-sm font-semibold text-text-main truncate">{providerLabel(group.provider)}</span>
+              <span
+                class="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-text-muted shrink-0"
+              >
+                {group.connections.length} {group.connections.length === 1 ? 'account' : 'accounts'}
+              </span>
+            </div>
+            <span class="text-xs text-text-muted/70 hidden sm:inline">
+              {groupCollapsed[group.provider] ? 'Click to expand' : 'Collapse'}
             </span>
           </button>
           {#if !groupCollapsed[group.provider]}
@@ -1335,7 +1340,7 @@
                 <ClaudeCacheTtl />
               </div>
             {/if}
-            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-3.5 md:grid-cols-2">
               {#each group.connections as conn (conn.id)}
         {@const isActive = isActiveConn(conn)}
         {@const quota = quotaData[conn.id]}
@@ -1347,79 +1352,98 @@
         {@const hiddenQuotaRows = getHiddenQuotaRows(conn.provider, rawQuotas, quotaVisibility)}
 
         <div
-          class="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-border-subtle bg-surface shadow-[var(--shadow-soft)] {isActive
+          class="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-border-subtle bg-surface shadow-[var(--shadow-soft)] transition-all hover:border-border/80 {isActive
             ? ''
-            : 'opacity-60'}"
+            : 'opacity-65 bg-surface/50'}"
         >
-          <!-- Card header -->
-          <div class="border-b border-border-subtle px-3 py-2">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex min-w-0 items-center gap-2">
-                <div
-                  class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md"
-                >
-                  <img
-                    src={getIconPath(conn.provider)}
-                    alt={conn.provider}
-                    class="size-8 object-contain"
-                    onerror={(e) => {
-                      ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                    }}
-                  />
-                </div>
-                <div class="min-w-0">
-                  <h3 class="truncate text-sm font-semibold text-text-main">
-                    {providerLabel(conn.provider)}
-                  </h3>
-                  {#if getConnectionLabel(conn)}
-                    <p class="truncate text-xs text-text-muted">{formatEmailLabel(getConnectionLabel(conn), $emailPrivacy)}</p>
-                  {/if}
-                  {#if getConnectionSecondaryLabel(conn)}
-                    <p class="truncate text-[11px] text-text-muted/80">{formatEmailLabel(getConnectionSecondaryLabel(conn), $emailPrivacy)}</p>
-                  {/if}
-                  {#if conn.provider === 'kiro'}
-                    <div class="mt-1 flex flex-wrap items-center gap-1">
-                      <span class="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
-                        {kiroMethodLabel(conn)}
-                      </span>
-                      {#if kiroRegion(conn)}
-                        <span class="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-                          {kiroRegion(conn)}
-                        </span>
-                      {/if}
+          <!-- Card header: Mobile responsive layout -->
+          <div class="border-b border-border-subtle/80 bg-surface-2/30 px-3.5 py-2.5">
+            <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <!-- Identity Left -->
+              <div class="flex min-w-0 items-center justify-between gap-2.5">
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <div
+                    class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 border border-border-subtle/50 p-1"
+                  >
+                    <img
+                      src={getIconPath(conn.provider)}
+                      alt={conn.provider}
+                      class="size-7 object-contain"
+                      onerror={(e) => {
+                        ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <h3 class="truncate text-sm font-semibold text-text-main">
+                        {providerLabel(conn.provider)}
+                      </h3>
                       <span
-                        class="rounded-full px-2 py-0.5 text-[10px] font-semibold {!isActive
+                        class="rounded-full px-2 py-0.2 text-[10px] font-semibold {!isActive
                           ? 'bg-surface-3 text-text-muted'
                           : conn.testStatus === 'active' || conn.testStatus === 'success'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                             : conn.testStatus === 'error' ||
                                 conn.testStatus === 'expired' ||
                                 conn.testStatus === 'unavailable'
-                              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
                               : 'bg-surface-3 text-text-muted'}"
                       >
-                        {!isActive ? 'disabled' : conn.testStatus || 'unknown'}
+                        {!isActive ? 'disabled' : conn.testStatus || 'active'}
                       </span>
-                      {#if (conn.providerSpecificData as Record<string, unknown> | undefined)?.profileArn}
-                        {@const profileArn = String((conn.providerSpecificData as Record<string, unknown>).profileArn)}
-                        <button
-                          type="button"
-                          onclick={() => copyArn(profileArn, conn.id)}
-                          title={profileArn}
-                          class="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle px-2.5 py-2 sm:py-0.5 text-[10px] text-text-muted transition-colors hover:text-primary cursor-pointer"
-                        >
-                          <span class="material-symbols-outlined text-[12px]">
-                            {copiedArnId === conn.id ? 'check' : 'content_copy'}
-                          </span>
-                          <code class="truncate font-mono">{profileArn}</code>
-                        </button>
-                      {/if}
                     </div>
-                  {/if}
+                    {#if getConnectionLabel(conn)}
+                      <p class="truncate text-xs text-text-muted font-mono">{formatEmailLabel(getConnectionLabel(conn), $emailPrivacy)}</p>
+                    {/if}
+                    {#if getConnectionSecondaryLabel(conn)}
+                      <p class="truncate text-[11px] text-text-muted/80">{formatEmailLabel(getConnectionSecondaryLabel(conn), $emailPrivacy)}</p>
+                    {/if}
+                    {#if conn.provider === 'kiro'}
+                      <div class="mt-1 flex flex-wrap items-center gap-1">
+                        <span class="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
+                          {kiroMethodLabel(conn)}
+                        </span>
+                        {#if kiroRegion(conn)}
+                          <span class="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                            {kiroRegion(conn)}
+                          </span>
+                        {/if}
+                        {#if (conn.providerSpecificData as Record<string, unknown> | undefined)?.profileArn}
+                          {@const profileArn = String((conn.providerSpecificData as Record<string, unknown>).profileArn)}
+                          <button
+                            type="button"
+                            onclick={() => copyArn(profileArn, conn.id)}
+                            title={profileArn}
+                            class="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle px-2.5 py-0.5 text-[10px] text-text-muted transition-colors hover:text-primary cursor-pointer"
+                          >
+                            <span class="material-symbols-outlined text-[12px]">
+                              {copiedArnId === conn.id ? 'check' : 'content_copy'}
+                            </span>
+                            <code class="truncate font-mono">{profileArn}</code>
+                          </button>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+
+                <!-- On mobile: Active toggle placed in header right -->
+                <div
+                  class="sm:hidden inline-flex items-center shrink-0 pl-1"
+                  title={isActive ? 'Disable connection' : 'Enable connection'}
+                >
+                  <Toggle
+                    size="sm"
+                    checked={isActive}
+                    disabled={rowBusy}
+                    onChange={(nextActive) => handleToggleConnectionActive(conn.id, nextActive)}
+                  />
                 </div>
               </div>
 
-              <div class="flex shrink-0 items-center gap-2 sm:gap-1">
+              <!-- Action buttons row -->
+              <div class="flex shrink-0 items-center justify-end gap-1.5 pt-1.5 sm:pt-0 border-t border-border-subtle/40 sm:border-0 flex-wrap">
                 {#if conn.provider === 'codex' || conn.provider === 'claude'}
                   {@const resetCreditCount = getCodexResetCreditCount(quota)}
                   <button
@@ -1430,7 +1454,7 @@
                     title={resetCreditCount > 0
                       ? `Redeem a ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credit (${resetCreditCount} available)`
                       : `Check ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credits`}
-                    class="flex h-11 sm:h-8 min-w-10 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-8 min-w-9 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
                     <span class="material-symbols-outlined text-[15px]">restart_alt</span>
                     <span>{resetCreditCount}</span>
@@ -1448,7 +1472,7 @@
                     title={resetCardCount > 0
                       ? `Redeem a GLM reset card (${resetCardCount} available)`
                       : 'Check GLM reset cards'}
-                    class="flex h-11 sm:h-8 min-w-10 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-8 min-w-9 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
                     <span class="material-symbols-outlined text-[15px]">restart_alt</span>
                     <span>{resetCardCount}</span>
@@ -1469,20 +1493,20 @@
                     onclick={() => toggleAutoPing(conn.id, conn.provider, !isAutoPingActive)}
                     title={AUTO_PING_TOOLTIPS[conn.provider]}
                     aria-label="Toggle auto-ping"
-                    class="tap-target flex h-11 sm:h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary' : 'text-text-muted'}"
+                    class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[18px]">bolt</span>
+                    <span class="material-symbols-outlined text-[17px]">bolt</span>
                   </button>
                   <button
                     type="button"
                     onclick={() => (autoPingEditing = conn)}
                     title="Auto-ping schedule"
                     aria-label="Configure auto-ping schedule"
-                    class="tap-target flex h-11 sm:h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
-                      ? 'text-primary'
-                      : 'text-text-muted'}"
+                    class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
+                      ? 'text-primary bg-primary/10'
+                      : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[18px]">schedule</span>
+                    <span class="material-symbols-outlined text-[17px]">schedule</span>
                   </button>
                 {/if}
 
@@ -1493,10 +1517,10 @@
                   disabled={isLoading || rowBusy}
                   aria-label="Refresh quota"
                   title="Refresh quota"
-                  class="tap-target flex h-11 sm:h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
+                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[18px] {isLoading
+                    class="material-symbols-outlined text-[17px] {isLoading
                       ? 'animate-spin'
                       : ''}">refresh</span
                   >
@@ -1509,9 +1533,9 @@
                   disabled={rowBusy}
                   aria-label="Edit connection"
                   title="Edit connection"
-                  class="tap-target flex h-11 sm:h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
+                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
                 >
-                  <span class="material-symbols-outlined text-[18px]">edit</span>
+                  <span class="material-symbols-outlined text-[17px]">edit</span>
                 </button>
 
                 <!-- Delete connection -->
@@ -1521,17 +1545,18 @@
                   disabled={rowBusy}
                   aria-label="Delete connection"
                   title="Delete connection"
-                  class="tap-target flex h-11 sm:h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
+                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[18px] {deletingId === conn.id
+                    class="material-symbols-outlined text-[17px] {deletingId === conn.id
                       ? 'animate-pulse'
                       : ''}">delete</span
                   >
                 </button>
 
+                <!-- On desktop: Active toggle placed at end of buttons -->
                 <div
-                  class="inline-flex items-center pl-0.5"
+                  class="hidden sm:inline-flex items-center pl-1"
                   title={isActive ? 'Disable connection' : 'Enable connection'}
                 >
                   <Toggle

@@ -136,7 +136,7 @@
       {/if}
     </div>
 
-    <div class="space-y-px">
+    <div class="space-y-1.5">
       {#each sortedQuotas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) as quota (
         `${quota.name}-${quota.index}`
       )}
@@ -157,104 +157,77 @@
         {@const countdownLabel = recurring ? `in ${countdown}` : `expires in ${countdown}`}
 
         <div
-          class="flex flex-col sm:flex-row items-start sm:items-center gap-2 border-b border-border-subtle/60 hover:bg-surface-2/60 transition-colors {cellPad}"
+          class="flex flex-col gap-1.5 rounded-xl border border-border-subtle/50 bg-surface/60 p-2.5 transition-all hover:bg-surface-2/60 hover:border-border-subtle"
         >
-          <!-- Name -->
-          <div class="flex w-full sm:w-36 min-w-0 items-center gap-1.5">
-            <span class="text-[10px] shrink-0">{colors.emoji}</span>
-            <span class="{nameText} font-medium text-text-main truncate">
-              {quota.name}
-            </span>
-          </div>
-
-          <!-- Progress + used/total -->
-          <div class="min-w-0 w-full sm:flex-1 {compact ? 'space-y-1' : 'space-y-1.5'}">
-            {#if !isUnlimited && !isCreditBalance && !isUnknown}
-              <div
-                class="{compact ? 'h-1' : 'h-1.5'} rounded-full overflow-hidden border {colors.bgLight} {quota.remainingPct ===
-                0
-                  ? 'border-border-subtle'
-                  : 'border-transparent'}"
-              >
-                <div
-                  class="h-full transition-all duration-300 {colors.bg}"
-                  style:width="{Math.min(quota.remainingPct ?? 0, 100)}%"
-                ></div>
-              </div>
-            {/if}
-
-            <div
-              class="flex items-center justify-between gap-1 min-w-0 {compact
-                ? 'text-[10px]'
-                : 'text-xs'}"
-            >
-              <span
-                class="text-text-muted truncate"
-                title={isUnlimited
-                  ? `${fmtNum(quota.used)} used · Unlimited`
-                  : isCreditBalance
-                    ? `Credit balance: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
-                    : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
-              >
-                {isUnlimited
-                  ? `${fmtNum(quota.used)} used · Unlimited`
-                  : isCreditBalance
-                    ? `Credit: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
-                    : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
+          <!-- Top Row: Name + Emoji + Status Badge -->
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-xs shrink-0 select-none">{colors.emoji}</span>
+              <span class="text-xs font-semibold text-text-main truncate" title={quota.name}>
+                {quota.name}
               </span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
               <span
-                class="font-medium shrink-0 {isUnlimited
-                  ? 'text-green-600 dark:text-green-400'
+                class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums {isUnlimited
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : isCreditBalance
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : colors.text}"
+                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                    : isUnknown
+                      ? 'bg-surface-3 text-text-muted'
+                      : colors.text}"
               >
-                {isUnlimited ? 'Unlimited' : isCreditBalance ? '' : isUnknown ? '—' : `${quota.remainingPct}%`}
+                {isUnlimited ? 'Unlimited' : isCreditBalance ? `${(quota.total || 0).toFixed(2)} ${quota.currency || ''}` : isUnknown ? '—' : `${quota.remainingPct}%`}
               </span>
+              {#if typeof onHideQuota === 'function'}
+                <button
+                  type="button"
+                  onclick={() => onHideQuota?.(quota)}
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main cursor-pointer"
+                  title="Hide this quota row"
+                  aria-label="Hide quota {quota.name}"
+                >
+                  <span class="material-symbols-outlined text-[15px]">visibility_off</span>
+                </button>
+              {/if}
             </div>
           </div>
 
-          <!-- Reset time -->
-          <div class="min-w-0 w-full sm:w-auto shrink">
+          <!-- Middle Row: Progress Bar -->
+          {#if !isUnlimited && !isCreditBalance && !isUnknown}
+            <div
+              class="h-1.5 w-full rounded-full overflow-hidden bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5"
+            >
+              <div
+                class="h-full transition-all duration-300 rounded-full {colors.bg}"
+                style:width="{Math.min(quota.remainingPct ?? 0, 100)}%"
+              ></div>
+            </div>
+          {/if}
+
+          <!-- Bottom Row: Usage numbers & Reset countdown -->
+          <div class="flex items-center justify-between gap-2 text-xs text-text-muted min-w-0">
+            <span
+              class="truncate font-mono text-[11px] text-text-muted"
+              title={isUnlimited
+                ? `${fmtNum(quota.used)} used · Unlimited`
+                : isCreditBalance
+                  ? `Credit balance: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
+                  : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
+            >
+              {isUnlimited
+                ? `${fmtNum(quota.used)} used`
+                : isCreditBalance
+                  ? `Credit: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
+                  : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
+            </span>
             {#if countdown !== '-' || resetDisplay}
-              {#if compact}
-                <div
-                  class="{resetPrimary} text-text-main font-medium truncate"
-                  title={resetDisplay || ''}
-                >
-                  {countdown !== '-' ? countdownLabel : resetDisplay}
-                </div>
-              {:else}
-                <div class="min-w-0 space-y-0.5">
-                  {#if countdown !== '-'}
-                    <div class="{resetPrimary} text-text-main font-medium truncate">
-                      {countdownLabel}
-                    </div>
-                  {/if}
-                  {#if resetDisplay}
-                    <div class="{resetSecondary} text-text-muted truncate">
-                      {resetDisplay}
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-            {:else}
-              <div class="{resetPrimary} text-text-muted italic">N/A</div>
+              <span class="truncate text-[11px] font-medium text-text-muted flex items-center gap-1 shrink-0">
+                <span class="material-symbols-outlined text-[13px] opacity-70">schedule</span>
+                {countdown !== '-' ? countdownLabel : resetDisplay}
+              </span>
             {/if}
           </div>
-
-          <!-- Hide action -->
-          {#if typeof onHideQuota === 'function'}
-            <button
-              type="button"
-              onclick={() => onHideQuota?.(quota)}
-              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main"
-              title="Hide this quota row"
-              aria-label="Hide quota {quota.name}"
-            >
-              <span class="material-symbols-outlined text-[15px]">visibility_off</span>
-            </button>
-          {/if}
         </div>
       {/each}
     </div>

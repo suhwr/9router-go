@@ -1290,6 +1290,7 @@
          Settings modal's Global tab. They are questions about the tunnels as a
          pair, so they are asked once, in one place, rather than twice on a card
          that only one of the two tunnels owns. -->
+    </div>
   </Card>
 
   <!-- BOTTOM SECTION: API Keys. The key list lives here (issue #199) so the
@@ -1427,7 +1428,7 @@
             rows={7}
             placeholder={'office | m-abc-123\nlaptop\n| m-def-456'}
             class="w-full px-3 py-2 rounded-lg bg-bg border border-border text-xs font-mono text-text-main placeholder:text-text-subtle focus:outline-none focus:border-brand-500 resize-y"
-          />
+          ></textarea>
           <p class="text-[11px] text-text-subtle">
             Both halves are optional. A blank name becomes <span class="font-code">Key N</span>.
           </p>
@@ -2052,9 +2053,6 @@
                     : 'The hostname you routed to this tunnel in Cloudflare Zero Trust. It must be listed as a Public Hostname on the tunnel, and its DNS must resolve through Cloudflare.'}
                 </p>
               </div>
-            {#if tunnelMode === 'named'}
-
-            {/if}
 
               <div class="space-y-1.5">
                 <label for="tunnel-token" class="text-xs font-semibold text-text-main">Tunnel Token</label>
