@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // MediaHandler handles embeddings, responses, audio, video, image, and web tool endpoints.
@@ -790,6 +792,94 @@ func (h *MediaHandler) HandleVideoGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleImageJobGet handles GET /v1/images/jobs/{id} and GET /images/jobs/{id}.
+func (h *MediaHandler) HandleImageJobGet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		id = chi.URLParam(r, "id")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" || strings.Contains(id, "..") || strings.Contains(id, "/") || strings.Contains(id, "\\") {
+		handlerutil.WriteJSONError(w, http.StatusBadRequest, "invalid image job id")
+		return
+	}
+
+	provider := r.URL.Query().Get("provider")
+	if provider == "" {
+		provider = r.Header.Get("x-provider")
+	}
+	var nodeID string
+	if provider != "" {
+		nodeID = provider
+	} else if h.Repo != nil {
+		if node, _, err := h.Repo.GetProviderNodeByPrefix("kovapi"); err == nil && node != nil {
+			nodeID = node.ID
+		} else if node, _, err := h.Repo.GetProviderNodeByPrefix("nezhagate"); err == nil && node != nil {
+			nodeID = node.ID
+		}
+	}
+	if nodeID == "" {
+		nodeID = "openai"
+	}
+
+	conn, connData, err := h.ChatH.GetBestConnectionWithContext(r.Context(), nodeID, "", nil, "")
+	if err != nil || connData == nil {
+		handlerutil.WriteJSONError(w, http.StatusNotFound, fmt.Sprintf("no active connection found for image provider: %v", err))
+		return
+	}
+
+	providerCfg, err := h.ChatH.GetProviderConfig(nodeID, connData)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	apiKey := chat.ExtractAPIKey(connData)
+	if apiKey == "" && providerCfg != nil {
+		apiKey = providerCfg.DefaultAPIKey
+	}
+	if apiKey == "" {
+		handlerutil.WriteJSONError(w, http.StatusUnauthorized, "no API key found")
+		return
+	}
+
+	client, err := h.ChatH.GetClientForConnection(connData)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	baseURL := strings.TrimRight(providerCfg.BaseURL, "/")
+	if connData != nil && connData.BaseURL != "" {
+		baseURL = strings.TrimRight(connData.BaseURL, "/")
+	}
+	targetURL := strings.TrimSuffix(baseURL, "/v1") + "/v1/images/jobs/" + id
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for k, v := range r.Header {
+		req.Header[k] = v
+	}
+	handlerutil.SetAuthHeader(req, apiKey, providerCfg.AuthHeader, providerCfg.AuthScheme)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, fmt.Sprintf("failed to query image job: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	copyUpstreamHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+	if conn != nil {
+		_ = h.Repo.UpdateConnectionLastUsed(conn.ID)
+	}
+}
+
 // defaultWebSearchModel returns "search-combo" if available, then any webSearch combo, then falls back to tavily/search.
 func (h *MediaHandler) defaultWebSearchModel() string {
 	if h.Repo != nil {
@@ -1210,6 +1300,34 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 				continue
 			}
 			defer func() { _ = resp.Body.Close() }()
+			if isImageEndpoint(endpoint) && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) && r.Header.Get("X-Async") != "true" && !strings.Contains(r.Header.Get("Prefer"), "respond-async") {
+				respBytes, err := io.ReadAll(resp.Body)
+				if err == nil {
+					if jobID, isAsync := isAsyncImageJob(respBytes); isAsync {
+						jobURL := strings.TrimSuffix(strings.TrimSuffix(targetURL, "/generations"), "/edits") + "/jobs/" + jobID
+						polledBytes, polledStatus, pollErr := h.pollAsyncImageJob(r.Context(), client, jobURL, providerCfg.AuthHeader, providerCfg.AuthScheme, apiKey)
+						if pollErr != nil {
+							log.Warn("media", "image job poll failed", "endpoint", endpoint, "provider", subInfo.Provider, "job", jobID, "error", pollErr)
+							lastErr = pollErr.Error()
+							lastStatus = polledStatus
+							continue
+						}
+						copyUpstreamHeaders(w.Header(), resp.Header)
+						w.Header().Del("Content-Length")
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(polledStatus)
+						w.Write(polledBytes)
+						h.Repo.UpdateConnectionLastUsed(conn.ID)
+						return
+					}
+					copyUpstreamHeaders(w.Header(), resp.Header)
+					w.Header().Del("Content-Length")
+					w.WriteHeader(resp.StatusCode)
+					w.Write(respBytes)
+					h.Repo.UpdateConnectionLastUsed(conn.ID)
+					return
+				}
+			}
 			copyUpstreamHeaders(w.Header(), resp.Header)
 			w.WriteHeader(resp.StatusCode)
 			io.Copy(w, resp.Body)
@@ -1646,6 +1764,56 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 		resp.Body = io.NopCloser(bytes.NewReader(errBody))
 	}
 
+	if isImageEndpoint(endpoint) && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) && r.Header.Get("X-Async") != "true" && !strings.Contains(r.Header.Get("Prefer"), "respond-async") {
+		respBytes, err := io.ReadAll(resp.Body)
+		if err == nil {
+			if jobID, isAsync := isAsyncImageJob(respBytes); isAsync {
+				jobURL := strings.TrimSuffix(strings.TrimSuffix(targetURL, "/generations"), "/edits") + "/jobs/" + jobID
+				polledBytes, polledStatus, pollErr := h.pollAsyncImageJob(r.Context(), client, jobURL, providerCfg.AuthHeader, providerCfg.AuthScheme, apiKey)
+				if pollErr != nil {
+					log.Error("media", "image job poll failed", "endpoint", endpoint, "provider", modelInfo.Provider, "job", jobID, "error", pollErr)
+					handlerutil.WriteJSONError(w, polledStatus, pollErr.Error())
+					return
+				}
+				copyUpstreamHeaders(w.Header(), resp.Header)
+				w.Header().Del("Content-Length")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(polledStatus)
+				w.Write(polledBytes)
+				if conn != nil {
+					_ = h.Repo.UpdateConnectionLastUsed(conn.ID)
+					latencyMs := time.Since(start).Milliseconds()
+					logInfo := &shared.UsageLogInfo{
+						Provider:     modelInfo.Provider,
+						Model:        modelInfo.Model,
+						ConnectionID: conn.ID,
+						APIKey:       apiKey,
+						Endpoint:     endpoint,
+					}
+					h.ChatH.LogUsage(r.Context(), logInfo, nil, latencyMs, body, nil)
+				}
+				return
+			}
+			copyUpstreamHeaders(w.Header(), resp.Header)
+			w.Header().Del("Content-Length")
+			w.WriteHeader(resp.StatusCode)
+			w.Write(respBytes)
+			if conn != nil {
+				_ = h.Repo.UpdateConnectionLastUsed(conn.ID)
+				latencyMs := time.Since(start).Milliseconds()
+				logInfo := &shared.UsageLogInfo{
+					Provider:     modelInfo.Provider,
+					Model:        modelInfo.Model,
+					ConnectionID: conn.ID,
+					APIKey:       apiKey,
+					Endpoint:     endpoint,
+				}
+				h.ChatH.LogUsage(r.Context(), logInfo, nil, latencyMs, body, nil)
+			}
+			return
+		}
+	}
+
 	copyUpstreamHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
@@ -1720,6 +1888,84 @@ func isVideoCreateEndpoint(endpoint string) bool {
 		return true
 	}
 	return false
+}
+
+// isImageEndpoint reports whether the endpoint is an image generation or editing endpoint.
+func isImageEndpoint(endpoint string) bool {
+	switch endpoint {
+	case "/v1/images/generations", "/images/generations",
+		"/v1/images/edits", "/images/edits":
+		return true
+	}
+	return false
+}
+
+type asyncImageJobCheck struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Object string `json:"object"`
+	Data   []any  `json:"data"`
+}
+
+func isAsyncImageJob(respBody []byte) (string, bool) {
+	var job asyncImageJobCheck
+	if err := json.Unmarshal(respBody, &job); err != nil {
+		return "", false
+	}
+	if job.ID != "" && len(job.Data) == 0 && (job.Status == "queued" || job.Status == "processing" || job.Status == "in_progress" || job.Object == "image.generation.job") {
+		return job.ID, true
+	}
+	return "", false
+}
+
+func (h *MediaHandler) pollAsyncImageJob(ctx context.Context, client *http.Client, jobURL, authHeader, authScheme, apiKey string) ([]byte, int, error) {
+	ticker := time.NewTicker(1500 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.After(90 * time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, 499, ctx.Err()
+		case <-timeout:
+			return nil, http.StatusGatewayTimeout, fmt.Errorf("async image generation timed out after 90 seconds")
+		case <-ticker.C:
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, jobURL, nil)
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+			handlerutil.SetAuthHeader(req, apiKey, authHeader, authScheme)
+			resp, err := client.Do(req)
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, 499, ctx.Err()
+				}
+				continue
+			}
+			respBytes, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				continue
+			}
+			if resp.StatusCode >= 400 {
+				return respBytes, resp.StatusCode, fmt.Errorf("upstream job poll error (HTTP %d): %s", resp.StatusCode, string(respBytes))
+			}
+
+			var statusCheck struct {
+				Status string `json:"status"`
+				Data   []any  `json:"data"`
+				Error  any    `json:"error"`
+			}
+			if err := json.Unmarshal(respBytes, &statusCheck); err == nil {
+				if statusCheck.Status == "succeeded" || statusCheck.Status == "completed" || len(statusCheck.Data) > 0 {
+					return respBytes, http.StatusOK, nil
+				}
+				if statusCheck.Status == "failed" || statusCheck.Status == "error" {
+					return respBytes, http.StatusBadRequest, fmt.Errorf("async image job failed: %s", string(respBytes))
+				}
+			}
+		}
+	}
 }
 
 // BuildEmbeddingsURL converts a chat completions URL to an embeddings URL.

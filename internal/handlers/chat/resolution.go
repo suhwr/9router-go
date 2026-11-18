@@ -450,6 +450,16 @@ func (h *ChatHandler) resolveModel(modelStr string) (*ModelInfo, error) {
 		return &ModelInfo{Provider: provider, Model: modelStr}, nil
 	}
 
+	// KovAPI / NezhaGate image models (e.g. gpt-image-*, seedream*, nano-banana*, flare*)
+	if isKovAPIImageModel(modelStr) {
+		if info := h.resolvePrefixProvider("kovapi", modelStr); info != nil {
+			return info, nil
+		}
+		if info := h.resolvePrefixProvider("nezhagate", modelStr); info != nil {
+			return info, nil
+		}
+	}
+
 	// 3.5 Check if it's a bare provider alias (e.g., "ag" -> "antigravity")
 	// Check custom prefix provider nodes first for bare alias
 	if info := h.resolvePrefixProvider(modelStr, ""); info != nil {
@@ -507,6 +517,21 @@ func codexOnlyModelSlug(model string) bool {
 		return true
 	}
 	return strings.HasPrefix(lower, "gpt-daybreak-") || strings.HasPrefix(lower, "gpt-reserve")
+}
+
+// isKovAPIImageModel reports whether a bare model identifier belongs to KovAPI's image generation suite.
+func isKovAPIImageModel(model string) bool {
+	lower := strings.ToLower(strings.TrimSpace(model))
+	if lower == "" {
+		return false
+	}
+	return strings.HasPrefix(lower, "gpt-image-") ||
+		strings.HasPrefix(lower, "seedream") ||
+		strings.HasPrefix(lower, "nano-banana-") ||
+		strings.HasPrefix(lower, "banana-") ||
+		strings.HasPrefix(lower, "grok-imagine-") ||
+		strings.HasPrefix(lower, "flare") ||
+		strings.HasPrefix(lower, "sunburst")
 }
 
 // resolvePrefixProvider checks if a provider name is a providerNode prefix.

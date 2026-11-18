@@ -803,6 +803,65 @@ func TestResolveModel_BareClaudeFallbackToOAuth(t *testing.T) {
 	}
 }
 
+func TestResolveModel_KovAPIImageModels(t *testing.T) {
+	database, cleanup := setupChatTestDB(t)
+	defer cleanup()
+	_, _ = database.Exec(`CREATE TABLE IF NOT EXISTS providerNodes (
+		id TEXT PRIMARY KEY,
+		type TEXT,
+		name TEXT,
+		data TEXT NOT NULL,
+		createdAt TEXT NOT NULL,
+		updatedAt TEXT NOT NULL
+	)`)
+	now := time.Now().UTC().Format(time.RFC3339)
+	nodeData, _ := json.Marshal(map[string]any{"prefix": "kovapi", "baseUrl": "https://kovapi.com/v1"})
+	_, _ = database.Exec(`INSERT INTO providerNodes (id, name, type, data, createdAt, updatedAt) VALUES ('node-kov', 'KovAPI', 'openai-compatible', ?, ?, ?)`,
+		string(nodeData), now, now)
+
+	connData, _ := json.Marshal(map[string]any{"apiKey": "sk-kov-test", "baseUrl": "https://kovapi.com/v1"})
+	_, _ = database.Exec(`INSERT INTO providerConnections (id, provider, authType, name, priority, isActive, data, createdAt, updatedAt) VALUES ('conn-kov', 'node-kov', 'apikey', 'KovAPI', 1, 1, ?, ?, ?)`,
+		string(connData), now, now)
+
+	h := NewChatHandler(db.NewRepo(database))
+
+	// 1. Bare model gpt-image-2.5-flare resolves to node-kov
+	info, err := h.ResolveModel("gpt-image-2.5-flare")
+	if err != nil {
+		t.Fatalf("resolve gpt-image-2.5-flare: %v", err)
+	}
+	if info.Provider != "node-kov" || info.Model != "gpt-image-2.5-flare" {
+		t.Errorf("got %s/%s, want node-kov/gpt-image-2.5-flare", info.Provider, info.Model)
+	}
+
+	// 2. Bare model seedream-5.0-pro resolves to node-kov
+	info, err = h.ResolveModel("seedream-5.0-pro")
+	if err != nil {
+		t.Fatalf("resolve seedream-5.0-pro: %v", err)
+	}
+	if info.Provider != "node-kov" || info.Model != "seedream-5.0-pro" {
+		t.Errorf("got %s/%s, want node-kov/seedream-5.0-pro", info.Provider, info.Model)
+	}
+
+	// 3. Prefix kovapi/gpt-image-2.5-flare resolves to node-kov
+	info, err = h.ResolveModel("kovapi/gpt-image-2.5-flare")
+	if err != nil {
+		t.Fatalf("resolve kovapi/gpt-image-2.5-flare: %v", err)
+	}
+	if info.Provider != "node-kov" || info.Model != "gpt-image-2.5-flare" {
+		t.Errorf("got %s/%s, want node-kov/gpt-image-2.5-flare", info.Provider, info.Model)
+	}
+
+	// 4. Alias nezhagate/nano-banana-2 resolves to node-kov
+	info, err = h.ResolveModel("nezhagate/nano-banana-2")
+	if err != nil {
+		t.Fatalf("resolve nezhagate/nano-banana-2: %v", err)
+	}
+	if info.Provider != "node-kov" || info.Model != "nano-banana-2" {
+		t.Errorf("got %s/%s, want node-kov/nano-banana-2", info.Provider, info.Model)
+	}
+}
+
 func BenchmarkResolveModelEntry(b *testing.B) {
 	database, cleanup := setupChatTestDB(b)
 	defer cleanup()
