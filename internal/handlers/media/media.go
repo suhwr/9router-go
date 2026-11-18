@@ -1121,7 +1121,16 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 			// vendor never serves (tavily got api.tavily.com/search/v1/search,
 			// serper got google.serper.dev/v1/search). Each vendor publishes its
 			// own search/fetch URL and verb in the registry.
-			targetURL := strings.TrimRight(providerCfg.BaseURL, "/") + endpoint
+			cleanBase := strings.TrimRight(providerCfg.BaseURL, "/")
+			cleanBase = strings.TrimSuffix(cleanBase, "/v1")
+			cleanBase = strings.TrimSuffix(cleanBase, "/chat/completions")
+			cleanBase = strings.TrimSuffix(cleanBase, "/messages")
+
+			normEndpoint := endpoint
+			if !strings.HasPrefix(normEndpoint, "/v1/") && strings.HasPrefix(normEndpoint, "/") {
+				normEndpoint = "/v1" + normEndpoint
+			}
+			targetURL := cleanBase + normEndpoint
 			method := r.Method
 			switch endpoint {
 			case "/v1/search":
@@ -1445,11 +1454,17 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 
 	var targetURL string
 	switch endpoint {
-	case "/v1/images/generations", "/images/generations", "/v1/images/edits", "/images/edits":
+	case "/v1/images/generations", "/images/generations":
 		if !hasCustomBaseURL && providerCfg.ImageURL != "" {
 			targetURL = providerCfg.ImageURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + endpoint
+			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/images/generations"
+		}
+	case "/v1/images/edits", "/images/edits":
+		if !hasCustomBaseURL && providerCfg.ImageURL != "" {
+			targetURL = providerCfg.ImageURL
+		} else {
+			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/images/edits"
 		}
 	case "/v1/audio/speech", "/audio/speech":
 		if !hasCustomBaseURL && providerCfg.TTSURL != "" {

@@ -28,9 +28,9 @@ func isRetryableComboError(ue *upstreamError) bool {
 	if ue == nil {
 		return false
 	}
-	if ue.StatusCode >= 400 && ue.StatusCode < 500 && ue.StatusCode != http.StatusTooManyRequests {
-		return false
-	}
+	// In combo fallback, allow trying the next model on upstream rejections
+	// (404 model not found, 400 format/capability mismatch, 422 unprocessable entity, 429 rate limit, 5xx server errors)
+	// so the user gets an answer from subsequent providers instead of an instant fail.
 	return true
 }
 
@@ -392,6 +392,35 @@ func firstString(m map[string]any, keys ...string) string {
 func stringOf(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
+}
+
+// FilterByRequiredCapabilities filters combo candidates down to only those satisfying
+// all hard required capabilities (e.g. vision, pdf, videoInput).
+// If at least one candidate satisfies the hard requirements, models lacking them are dropped,
+// preventing fatal 400 Bad Request errors when falling back to text-only models.
+func FilterByRequiredCapabilities(comboModels []string, required map[string]bool) []string {
+	hard := requiredHardCaps(required)
+	if len(hard) == 0 {
+		return comboModels
+	}
+	var capable []string
+	for _, m := range comboModels {
+		caps := modelEntryCaps(m)
+		match := true
+		for _, c := range hard {
+			if !capabilityFlag(caps, c) {
+				match = false
+				break
+			}
+		}
+		if match {
+			capable = append(capable, m)
+		}
+	}
+	if len(capable) > 0 {
+		return capable
+	}
+	return comboModels
 }
 
 // ReorderByCapabilities stably floats models satisfying constraints to the
@@ -989,7 +1018,7 @@ func (h *ChatHandler) handleComboFallbackWithVisited(ctx context.Context, cw *co
 	// This ensures that if the rotated model lacks required capabilities (e.g., vision), a capable model overrides it.
 	if required := DetectRequiredCapabilities(body); len(required) > 0 {
 		reordered := ReorderByCapabilities(models, required)
-		if reordered[0] != models[0] {
+		if len(reordered) > 0 && len(models) > 0 && reordered[0] != models[0] {
 			log.Info("combo", "auto-switch", "caps", keysString(required), "model", reordered[0])
 		}
 		models = reordered

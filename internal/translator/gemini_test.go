@@ -473,6 +473,94 @@ func TestThoughtSignatureStreamMultiChunk(t *testing.T) {
 	}
 }
 
+func TestTranslateOpenAIToGemini_VideoInput(t *testing.T) {
+	body := []byte(`{
+		"model": "gemini-2.5-flash",
+		"messages": [
+			{
+				"role": "user",
+				"content": [
+					{"type": "text", "text": "Describe this video"},
+					{
+						"type": "video_url",
+						"video_url": {"url": "https://example.com/sample.mp4"}
+					}
+				]
+			}
+		]
+	}`)
+
+	geminiJSON, err := TranslateOpenAIToGemini(body)
+	if err != nil {
+		t.Fatalf("TranslateOpenAIToGemini failed: %v", err)
+	}
+
+	var req GeminiRequest
+	if err := json.Unmarshal(geminiJSON, &req); err != nil {
+		t.Fatalf("unmarshal gemini request: %v", err)
+	}
+
+	if len(req.Contents) == 0 || len(req.Contents[0].Parts) < 2 {
+		t.Fatalf("expected at least 2 parts in content, got %+v", req.Contents)
+	}
+
+	videoPart := req.Contents[0].Parts[1]
+	if videoPart.FileData == nil {
+		t.Fatalf("expected fileData for video, got nil")
+	}
+	if videoPart.FileData.MimeType != "video/mp4" {
+		t.Errorf("expected mimeType video/mp4, got %s", videoPart.FileData.MimeType)
+	}
+}
+
+func TestTranslateGeminiResponseToOpenAI_GeneratedImage(t *testing.T) {
+	geminiResp := `{
+		"candidates": [
+			{
+				"content": {
+					"parts": [
+						{"text": "Here is your generated image:"},
+						{
+							"inlineData": {
+								"mimeType": "image/png",
+								"data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+							}
+						}
+					]
+				},
+				"finishReason": "STOP"
+			}
+		]
+	}`
+
+	openaiBytes, _, err := TranslateGeminiResponseToOpenAI([]byte(geminiResp))
+	if err != nil {
+		t.Fatalf("TranslateGeminiResponseToOpenAI failed: %v", err)
+	}
+
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(openaiBytes, &parsed); err != nil {
+		t.Fatalf("unmarshal openai bytes: %v", err)
+	}
+
+	if len(parsed.Choices) == 0 {
+		t.Fatalf("no choices in response")
+	}
+	content := parsed.Choices[0].Message.Content
+	if !strings.Contains(content, "![image](data:image/png;base64,") {
+		t.Errorf("expected markdown image with data URI, got: %s", content)
+	}
+	if !strings.Contains(content, "Here is your generated image:") {
+		t.Errorf("expected text intro in content, got: %s", content)
+	}
+}
+
 func TestTranslateGeminiResponseToOpenAI_PropagatesThoughtSig(t *testing.T) {
 	// In non-stream, if thought_signature is on the thinking part, it should propagate to functionCall
 	geminiResp := `{

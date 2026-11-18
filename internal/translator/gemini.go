@@ -154,6 +154,26 @@ func remoteImageMimeType(rawURL string) string {
 		return "image/gif"
 	case ".bmp":
 		return "image/bmp"
+	case ".png":
+		return "image/png"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".mkv":
+		return "video/x-matroska"
+	case ".3gp":
+		return "video/3gpp"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".ogg":
+		return "audio/ogg"
+	case ".pdf":
+		return "application/pdf"
 	}
 	return "image/png"
 }
@@ -740,8 +760,8 @@ func TranslateGeminiResponseToOpenAI(geminiBody []byte) ([]byte, *OpenAIUsage, e
 	finishReason := geminiResp.Candidates[0].FinishReason
 
 	// Build OpenAI response
-	var openaiContent string
-	var reasoningContent string
+	var sbOpenAI strings.Builder
+	var sbReasoning strings.Builder
 	var toolCalls []OpenAIToolCall
 
 	if content != nil {
@@ -751,14 +771,24 @@ func TranslateGeminiResponseToOpenAI(geminiBody []byte) ([]byte, *OpenAIUsage, e
 				lastSig = part.ThoughtSignature
 			}
 			if part.Text != "" && (part.Thought == nil || !*part.Thought) {
-				if openaiContent != "" {
-					openaiContent += part.Text
-				} else {
-					openaiContent = part.Text
-				}
+				sbOpenAI.WriteString(part.Text)
 			}
 			if part.Text != "" && part.Thought != nil && *part.Thought {
-				reasoningContent += part.Text
+				sbReasoning.WriteString(part.Text)
+			}
+			if part.InlineData != nil && part.InlineData.Data != "" {
+				mime := part.InlineData.MimeType
+				if mime == "" {
+					mime = "image/png"
+				}
+				if sbOpenAI.Len() > 0 {
+					sbOpenAI.WriteString("\n")
+				}
+				sbOpenAI.WriteString("![image](data:")
+				sbOpenAI.WriteString(mime)
+				sbOpenAI.WriteString(";base64,")
+				sbOpenAI.WriteString(part.InlineData.Data)
+				sbOpenAI.WriteString(")")
 			}
 			if part.FunctionCall != nil {
 				args, err := json.Marshal(part.FunctionCall.Args, json.Deterministic(true))
@@ -786,6 +816,9 @@ func TranslateGeminiResponseToOpenAI(geminiBody []byte) ([]byte, *OpenAIUsage, e
 			}
 		}
 	}
+
+	openaiContent := sbOpenAI.String()
+	reasoningContent := sbReasoning.String()
 
 	// Map finish reason
 	claudeStop := geminiFinishToOpenAI(finishReason)
@@ -915,6 +948,13 @@ func TranslateGeminiChunkToOpenAI(chunk []byte, state *GeminiStreamState) ([]byt
 				}
 				if part.Text != "" && part.Thought != nil && *part.Thought {
 					delta["reasoning_content"] = part.Text
+				}
+				if part.InlineData != nil && part.InlineData.Data != "" {
+					mime := part.InlineData.MimeType
+					if mime == "" {
+						mime = "image/png"
+					}
+					delta["content"] = fmt.Sprintf("![image](data:%s;base64,%s)", mime, part.InlineData.Data)
 				}
 				if part.FunctionCall != nil {
 					args, err := json.Marshal(part.FunctionCall.Args, json.Deterministic(true))
@@ -1115,8 +1155,8 @@ func convertContentToGeminiParts(content any) []GeminiPart {
 									data := url[comma+1:]
 									// Claude under Antigravity rejects images >5MB base64
 									// (OMP max-image-payload-bytes 5242880 in google-antigravity.kdl).
-									// Dropping over-budget frames keeps the turn alive.
-									if len(data) <= 5242880 {
+									// Video payloads up to 25MB are permitted on Gemini inlineData.
+									if len(data) <= 5242880 || strings.HasPrefix(mimeType, "video/") {
 										parts = append(parts, GeminiPart{
 											InlineData: &GeminiInlineData{MimeType: mimeType, Data: data},
 										})
@@ -1127,6 +1167,27 @@ func convertContentToGeminiParts(content any) []GeminiPart {
 							// Antigravity rejects the wildcard (400 "Unsupported
 							// mime type: image/*"), so the fallback emits a
 							// concrete type inferred from a fixed extension set.
+							parts = append(parts, GeminiPart{
+								FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
+							})
+						}
+					}
+				}
+				if vid, ok := m["video_url"].(map[string]any); ok {
+					if url, ok := vid["url"].(string); ok {
+						if strings.HasPrefix(url, "data:") {
+							if semi := strings.Index(url, ";"); semi > 5 {
+								mimeType := url[5:semi]
+								if comma := strings.Index(url, ","); comma > 0 {
+									data := url[comma+1:]
+									if len(data) <= 26214400 { // up to 25MB for video
+										parts = append(parts, GeminiPart{
+											InlineData: &GeminiInlineData{MimeType: mimeType, Data: data},
+										})
+									}
+								}
+							}
+						} else if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 							parts = append(parts, GeminiPart{
 								FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
 							})

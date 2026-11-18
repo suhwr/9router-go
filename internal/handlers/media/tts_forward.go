@@ -97,7 +97,13 @@ func (h *MediaHandler) forwardTTSRequest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	// 4. Default OpenAI-compatible TTS
+	// 4. gemini / antigravity native audio TTS
+	if modelInfo.Provider == "gemini" || modelInfo.Provider == "gm" || modelInfo.Provider == "antigravity" || modelInfo.Provider == "ag" || strings.HasPrefix(modelInfo.Model, "gemini") {
+		h.forwardGeminiTTS(w, r, body, modelInfo, req.Input, req.Voice, req.ResponseFormat)
+		return
+	}
+
+	// 5. Default OpenAI-compatible TTS
 	h.forwardMediaRequest(w, r, body, "tts-1", "/v1/audio/speech")
 }
 
@@ -262,4 +268,168 @@ func nvidiaTTSURL(chatH *chat.ChatHandler, connData *chat.ConnectionData) string
 		return strings.TrimRight(cfg.BaseURL, "/")
 	}
 	return "https://integrate.api.nvidia.com/v1/audio/speech"
+}
+
+func (h *MediaHandler) forwardGeminiTTS(w http.ResponseWriter, r *http.Request, body []byte, modelInfo *chat.ModelInfo, input, voice, respFmt string) {
+	conn, connData, err := h.ChatH.GetBestConnectionWithContext(r.Context(), modelInfo.Provider, modelInfo.ConnectionID, nil, modelInfo.Model)
+	if err != nil || connData == nil {
+		handlerutil.WriteJSONError(w, http.StatusNotFound, fmt.Sprintf("no active connection for %s", modelInfo.Provider))
+		return
+	}
+	apiKey := chat.ExtractAPIKey(connData)
+	if apiKey == "" {
+		handlerutil.WriteJSONError(w, http.StatusUnauthorized, "no API key found for gemini")
+		return
+	}
+
+	model := modelInfo.Model
+	if model == "" || model == "tts" || model == "speech" || model == "gemini" {
+		model = "gemini-2.5-flash-preview-tts"
+	}
+	// Map voice to Gemini prebuilt voices (Puck, Charon, Kore, Fenrir, Aoede)
+	voiceName := "Puck"
+	switch strings.ToLower(voice) {
+	case "alloy", "puck":
+		voiceName = "Puck"
+	case "echo", "charon":
+		voiceName = "Charon"
+	case "fable", "kore", "shimmer":
+		voiceName = "Kore"
+	case "onyx", "fenrir":
+		voiceName = "Fenrir"
+	case "nova", "aoede":
+		voiceName = "Aoede"
+	default:
+		if voice != "" && voice != "default" {
+			voiceName = voice
+		}
+	}
+
+	payload := map[string]any{
+		"contents": []any{
+			map[string]any{
+				"parts": []any{
+					map[string]any{"text": input},
+				},
+			},
+		},
+		"generationConfig": map[string]any{
+			"responseModalities": []string{"AUDIO"},
+			"speechConfig": map[string]any{
+				"voiceConfig": map[string]any{
+					"prebuiltVoiceConfig": map[string]any{
+						"voiceName": voiceName,
+					},
+				},
+			},
+		},
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to marshal gemini tts payload")
+		return
+	}
+
+	providerCfg, _ := h.ChatH.GetProviderConfig(modelInfo.Provider, connData)
+	baseURL := "https://generativelanguage.googleapis.com/v1beta"
+	if providerCfg != nil && providerCfg.BaseURL != "" {
+		baseURL = strings.TrimRight(providerCfg.BaseURL, "/")
+		baseURL = strings.TrimSuffix(baseURL, "/chat/completions")
+		baseURL = strings.TrimSuffix(baseURL, "/openai")
+	}
+	if connData != nil && connData.BaseURL != "" {
+		baseURL = strings.TrimRight(connData.BaseURL, "/")
+		baseURL = strings.TrimSuffix(baseURL, "/chat/completions")
+		baseURL = strings.TrimSuffix(baseURL, "/openai")
+	}
+
+	targetURL := fmt.Sprintf("%s/models/%s:generateContent", baseURL, model)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, targetURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to create gemini tts request")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if providerCfg != nil && providerCfg.AuthHeader != "" {
+		handlerutil.SetAuthHeader(req, apiKey, providerCfg.AuthHeader, providerCfg.AuthScheme)
+	} else {
+		req.Header.Set("x-goog-api-key", apiKey)
+	}
+
+	client, clientErr := h.ChatH.GetClientForConnection(connData)
+	if clientErr != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, clientErr.Error())
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, "gemini tts request failed: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, "failed to read gemini tts response")
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Warn("media", "gemini tts upstream error", "status", resp.StatusCode, "body", string(respBody[:min(300, len(respBody))]))
+		handlerutil.WriteJSONError(w, resp.StatusCode, fmt.Sprintf("gemini tts upstream error %d: %s", resp.StatusCode, string(respBody[:min(300, len(respBody))])))
+		return
+	}
+
+	var geminiResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					InlineData struct {
+						MimeType string `json:"mimeType"`
+						Data     string `json:"data"`
+					} `json:"inlineData"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, "failed to parse gemini tts response")
+		return
+	}
+
+	var audioB64 string
+	audioMime := "audio/mp3"
+	if len(geminiResp.Candidates) > 0 {
+		for _, part := range geminiResp.Candidates[0].Content.Parts {
+			if part.InlineData.Data != "" {
+				audioB64 = part.InlineData.Data
+				if part.InlineData.MimeType != "" {
+					audioMime = part.InlineData.MimeType
+				}
+				break
+			}
+		}
+	}
+	if audioB64 == "" {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, "no audio data returned from gemini")
+		return
+	}
+
+	audioBytes, err := base64.StdEncoding.DecodeString(audioB64)
+	if err != nil {
+		handlerutil.WriteJSONError(w, http.StatusBadGateway, "failed to decode gemini audio base64")
+		return
+	}
+
+	ext := "mp3"
+	if strings.Contains(audioMime, "wav") {
+		ext = "wav"
+	} else if strings.Contains(audioMime, "ogg") {
+		ext = "ogg"
+	}
+
+	if h.Repo != nil {
+		h.Repo.UpdateConnectionLastUsed(conn.ID)
+	}
+	h.trackTTSUsage(modelInfo.Provider, modelInfo.Model)
+	h.writeTTSResponse(w, r, respFmt, audioBytes, audioMime, ext)
 }

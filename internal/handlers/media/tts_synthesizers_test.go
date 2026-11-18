@@ -178,6 +178,70 @@ func TestLiveTTS_Edge(t *testing.T) {
 	}
 }
 
+func TestTTS_Gemini_Success(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "generateContent") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			mockAudioBase64 := "AAAAGGZ0eXBtcDQyAAAAAG1wNDJtcDQxAAAACW1vb3YAAABsbXZoZAAAAAA="
+			resp := map[string]any{
+				"candidates": []map[string]any{
+					{
+						"content": map[string]any{
+							"parts": []map[string]any{
+								{
+									"inlineData": map[string]string{
+										"mimeType": "audio/mp3",
+										"data":     mockAudioBase64,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			jsonBytes, _ := json.Marshal(resp)
+			w.Write(jsonBytes)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mockServer.Close()
+
+	database, cleanup := setupMultimodalTestDB(t)
+	defer cleanup()
+
+	// Insert gemini connection pointing to mockServer
+	if _, err := database.Exec(`INSERT INTO providerConnections (id, provider, authType, name, isActive, priority, data, createdAt, updatedAt) VALUES ('conn-gemini', 'gemini', 'apikey', 'Gemini Key', 1, 1, json_object('apiKey', 'mock-key', 'baseUrl', ?), '2026-01-01', '2026-01-01')`, mockServer.URL); err != nil {
+		t.Fatalf("insert conn: %v", err)
+	}
+
+	repo := db.NewRepo(database)
+	handler := newTestMediaHandler(repo)
+
+	reqBody := `{"model":"gemini/gemini-2.5-flash-preview-tts","input":"Hello gemini tts","voice":"Puck","response_format":"json"}`
+	req := httptest.NewRequest("POST", "/v1/audio/speech", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.HandleAudioSpeech(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out["format"] != "mp3" {
+		t.Errorf("expected mp3 format, got %v", out["format"])
+	}
+	if out["audio"] == "" {
+		t.Errorf("expected audio base64, got empty")
+	}
+}
+
 func ioReadAll(r io.Reader) ([]byte, error) {
 	return io.ReadAll(r)
 }
