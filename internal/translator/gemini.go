@@ -4,9 +4,12 @@ import (
 	"9router/proxy/internal/providers"
 	"9router/proxy/internal/thinking"
 	"bytes"
+	"encoding/base64"
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -176,6 +179,47 @@ func remoteImageMimeType(rawURL string) string {
 		return "application/pdf"
 	}
 	return "image/png"
+}
+
+var remoteMediaClient = &http.Client{
+	Timeout: 8 * time.Second,
+}
+
+func fetchRemoteMediaInlineData(rawURL string) *GeminiInlineData {
+	if strings.Contains(rawURL, "generativelanguage.googleapis.com") || strings.Contains(rawURL, "cloudcode-pa.googleapis.com") {
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := remoteMediaClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+
+	mimeType := resp.Header.Get("Content-Type")
+	if semi := strings.IndexByte(mimeType, ';'); semi >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:semi])
+	}
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		mimeType = remoteImageMimeType(rawURL)
+	}
+
+	return &GeminiInlineData{
+		MimeType: mimeType,
+		Data:     base64.StdEncoding.EncodeToString(data),
+	}
 }
 
 type GeminiInlineData struct {
@@ -1164,12 +1208,13 @@ func convertContentToGeminiParts(content any) []GeminiPart {
 								}
 							}
 						} else if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-							// Antigravity rejects the wildcard (400 "Unsupported
-							// mime type: image/*"), so the fallback emits a
-							// concrete type inferred from a fixed extension set.
-							parts = append(parts, GeminiPart{
-								FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
-							})
+							if inline := fetchRemoteMediaInlineData(url); inline != nil {
+								parts = append(parts, GeminiPart{InlineData: inline})
+							} else {
+								parts = append(parts, GeminiPart{
+									FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
+								})
+							}
 						}
 					}
 				}
@@ -1188,9 +1233,13 @@ func convertContentToGeminiParts(content any) []GeminiPart {
 								}
 							}
 						} else if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-							parts = append(parts, GeminiPart{
-								FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
-							})
+							if inline := fetchRemoteMediaInlineData(url); inline != nil {
+								parts = append(parts, GeminiPart{InlineData: inline})
+							} else {
+								parts = append(parts, GeminiPart{
+									FileData: &GeminiFileData{FileUri: url, MimeType: remoteImageMimeType(url)},
+								})
+							}
 						}
 					}
 				}

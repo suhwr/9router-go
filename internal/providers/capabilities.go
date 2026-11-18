@@ -1233,6 +1233,12 @@ func GetCapabilitiesForModel(provider, model string) Capabilities {
 		res.Vision = true
 	}
 
+	// Models prefixed with cx/ (CodeX text CLI) do not support vision even if the underlying
+	// model name matches gpt-6 or similar patterns.
+	if strings.HasPrefix(model, "cx/") || strings.HasPrefix(baseModel, "cx/") {
+		res.Vision = false
+	}
+
 	// A speech-synthesis model emits audio, and models_list's buildModalities
 	// derives output_modalities from this flag alone — so a TTS model without
 	// it is published as text-only and never reaches the audio lane, while its

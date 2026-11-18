@@ -1,6 +1,7 @@
 package media
 
 import (
+	"encoding/base64"
 	json "encoding/json/v2"
 	"io"
 	"net/http"
@@ -239,6 +240,80 @@ func TestTTS_Gemini_Success(t *testing.T) {
 	}
 	if out["audio"] == "" {
 		t.Errorf("expected audio base64, got empty")
+	}
+}
+
+func TestTTS_Gemini_MultiKeyFailover(t *testing.T) {
+	conn1Hits := 0
+	conn2Hits := 0
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("x-goog-api-key")
+		if apiKey == "key-1" {
+			conn1Hits++
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":{"code":429,"message":"quota exceeded"}}`))
+			return
+		}
+		if apiKey == "key-2" {
+			conn2Hits++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			mockAudioBase64 := base64.StdEncoding.EncodeToString(make([]byte, 48000))
+			resp := map[string]any{
+				"candidates": []any{
+					map[string]any{
+						"content": map[string]any{
+							"parts": []map[string]any{
+								{
+									"inlineData": map[string]string{
+										"mimeType": "audio/l16; rate=24000; channels=1",
+										"data":     mockAudioBase64,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			jsonBytes, _ := json.Marshal(resp)
+			w.Write(jsonBytes)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mockServer.Close()
+
+	database, cleanup := setupMultimodalTestDB(t)
+	defer cleanup()
+
+	if _, err := database.Exec(`INSERT INTO providerConnections (id, provider, authType, name, isActive, priority, data, createdAt, updatedAt) VALUES ('conn-1', 'gemini', 'apikey', 'Gemini 1', 1, 1, json_object('apiKey', 'key-1', 'baseUrl', ?), '2026-01-01', '2026-01-01')`, mockServer.URL); err != nil {
+		t.Fatalf("insert conn 1: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO providerConnections (id, provider, authType, name, isActive, priority, data, createdAt, updatedAt) VALUES ('conn-2', 'gemini', 'apikey', 'Gemini 2', 1, 5, json_object('apiKey', 'key-2', 'baseUrl', ?), '2026-01-01', '2026-01-01')`, mockServer.URL); err != nil {
+		t.Fatalf("insert conn 2: %v", err)
+	}
+
+	repo := db.NewRepo(database)
+	handler := newTestMediaHandler(repo)
+
+	reqBody := `{"model":"gemini/gemini-3.1-flash-tts-preview/Kore","input":"Testing failover","voice":"Kore","response_format":"wav"}`
+	req := httptest.NewRequest("POST", "/v1/audio/speech", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.HandleAudioSpeech(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if conn1Hits != 1 {
+		t.Errorf("expected conn 1 to be tried 1 time, got %d", conn1Hits)
+	}
+	if conn2Hits != 1 {
+		t.Errorf("expected conn 2 to be tried 1 time, got %d", conn2Hits)
+	}
+	if !strings.HasPrefix(rec.Header().Get("Content-Type"), "audio/wav") {
+		t.Errorf("expected audio/wav content type, got %s", rec.Header().Get("Content-Type"))
 	}
 }
 
