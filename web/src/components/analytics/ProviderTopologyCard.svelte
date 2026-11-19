@@ -51,8 +51,8 @@
   )
 
   // STAGED CARDIAC RHYTHM:
-  // Idle (0 active requests): Very calm, tranquil, slow resting breath (5.5s cycle / ~11 BPM).
-  // Active traffic: Speeds up dynamically to match throughput.
+  // Idle (0 active requests): Calm, serene, gentle breathing rhythm (~4.8s cycle / ~12 BPM).
+  // Active traffic: Progressively speeds up to match throughput.
   let stageLevel = $derived.by(() => {
     if (activeCount >= 6) return 4
     if (activeCount >= 3) return 3
@@ -65,7 +65,7 @@
       case 4: return 0.95  // 126 BPM - Peak Overdrive
       case 3: return 1.50  // 80 BPM  - Elevated Flow
       case 2: return 2.40  // 50 BPM  - Active Rhythm
-      default: return 5.50 // 11 BPM  - Calm Resting Standby
+      default: return 4.80 // 12 BPM  - Calm Resting Rhythm
     }
   })
 
@@ -78,14 +78,14 @@
       case 2:
         return { label: 'Active Rhythm', color: '#10b981', bpm: 50, numRings: 2 }
       default:
-        return { label: 'Resting Standby', color: '#64748b', bpm: 11, numRings: 1 }
+        return { label: 'Resting Rhythm', color: '#64748b', bpm: 12, numRings: 1 }
     }
   })
 
   // Container sizing and fitView state
   let containerEl = $state<HTMLDivElement | null>(null)
   let containerWidth = $state(900)
-  let containerHeight = $state(560)
+  let containerHeight = $state(520)
 
   // Zoom & Pan transforms with hardware acceleration
   let zoom = $state(0.85)
@@ -120,19 +120,26 @@
     return { x: cx + dx * s, y: cy + dy * s }
   }
 
-  // 100% SYMMETRICAL DUAL-ORBIT TOPOLOGY WITH CONTINUOUS TANGENT BÉZIER FORKS
-  // - Symmetrical Cardinal & Diagonal placement (zero crowding, completely balanced)
-  // - Outer cards stationed in diagonal corridors (sela-sela) so lines NEVER cut across inner cards
-  // - 100% Pure Cubic Bézier curves: ZERO straight lines, ZERO sharp angles
-  // - Positions are 100% static & deterministic
+  // 1 SINGLE DETERMINISTIC ORBIT WITH 100% PURE CUBIC BÉZIER CURVES
+  // - Clean single orbit: symmetrical, spacious, perfectly distributed around center
+  // - Pure Cubic Bézier curves with lateral wave offsets (ZERO straight lines, ZERO sharp angles)
+  // - 100% stable stationary positions
   let geometry = $derived.by(() => {
-    const total = displayProviders.length
-    if (total === 0) {
-      return { rx1: 240, ry1: 140, rx2: 400, ry2: 240, nodes: [], trunks: [] }
+    const s = displayProviders.length
+    if (s === 0) {
+      return { rx: 280, ry: 160, nodes: [] }
     }
 
-    // Helper to test if a provider is live/recent/error
-    const checkStatus = (p: ProviderNodeItem) => {
+    // Dynamic ellipse radius based on node count for spacious layout
+    const rx = Math.max(280, (190 * s) / (2 * Math.PI))
+    const ry = Math.max(165, 0.54 * rx)
+
+    const nodes = displayProviders.map((p, idx) => {
+      // Deterministic symmetrical angle around single orbit
+      const angle = -Math.PI / 2 + (2 * Math.PI * idx) / s
+      const x = rx * Math.cos(angle)
+      const y = ry * Math.sin(angle)
+
       const pid = p.id.toLowerCase().trim()
       const pname = (p.name || '').toLowerCase().trim()
       const palias = (p.alias || '').toLowerCase().trim()
@@ -141,6 +148,7 @@
         const t = target.toLowerCase().trim()
         return t === pid || t === pname || (Boolean(palias) && t === palias)
       }
+
       const isActive =
         activeProviderIds.has(pid) ||
         activeProviderIds.has(pname) ||
@@ -148,276 +156,55 @@
         (hasPulse && isMatch(pulseProvider))
       const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
       const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
-      return { isActive, isLast, isError }
-    }
 
-    // Radius tuned for spacious layout without forcing aggressive zoom out
-    const rx1 = 240
-    const ry1 = 145
-    const rx2 = 410
-    const ry2 = 250
+      // Exact pixel-perfect border points
+      const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
+      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, 0, 0)
 
-    // Symmetrical Cardinal Distribution:
-    // If <= 4 nodes: placed symmetrically on Ring 1.
-    // If > 4 nodes: Top 4 nodes on Ring 1 (Cardinal: Top, Right, Bottom, Left),
-    // and remaining nodes distributed symmetrically across the 4 Diagonal Corridors on Ring 2!
-    if (total <= 4) {
-      const cardinalAngles =
-        total === 1
-          ? [0]
-          : total === 2
-            ? [-Math.PI / 2, Math.PI / 2]
-            : total === 3
-              ? [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]
-              : [-Math.PI / 2, 0, Math.PI / 2, Math.PI]
+      // PURE CUBIC BÉZIER WAVE: Guaranteed non-straight with lateral perpendicular offset
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const dist = Math.hypot(dx, dy) || 1
+      const nx = -dy / dist
+      const ny = dx / dist
 
-      const singleRingNodes = displayProviders.map((p, idx) => {
-        const angle = cardinalAngles[idx]
-        const x = rx1 * Math.cos(angle)
-        const y = ry1 * Math.sin(angle)
-        const status = checkStatus(p)
+      // Lateral bow alternating per node to give an organic cybernetic weave
+      const bow = Math.max(24, Math.min(48, dist * 0.12)) * (idx % 2 === 0 ? 1 : -1)
 
-        const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
-        const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, 0, 0)
+      const cp1x = source.x + (dx / dist) * (dist * 0.35) + nx * bow
+      const cp1y = source.y + (dy / dist) * (dist * 0.35) + ny * bow
+      const cp2x = target.x - (dx / dist) * (dist * 0.35) - nx * (bow * 0.6)
+      const cp2y = target.y - (dy / dist) * (dist * 0.35) - ny * (bow * 0.6)
 
-        // Smooth wave curve with lateral offset to guarantee it is NEVER straight
-        const dx = target.x - source.x
-        const dy = target.y - source.y
-        const dist = Math.hypot(dx, dy) || 1
-        const nx = -dy / dist
-        const ny = dx / dist
-        const bow = 35 * (idx % 2 === 0 ? 1 : -1)
+      const curvePath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
 
-        const cp1x = source.x + (dx / dist) * (dist * 0.35) + nx * bow
-        const cp1y = source.y + (dy / dist) * (dist * 0.35) + ny * bow
-        const cp2x = target.x - (dx / dist) * (dist * 0.35) - nx * (bow * 0.6)
-        const cp2y = target.y - (dy / dist) * (dist * 0.35) - ny * (bow * 0.6)
-
-        const curvePath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-        const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
-
-        return {
-          ...p,
-          ...status,
-          ring: 'inner' as const,
-          x,
-          y,
-          curvePath,
-          branchPath: curvePath,
-          returnPath,
-          textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
-          color: p.color || '#38bdf8'
-        }
-      })
-
-      return {
-        rx1,
-        ry1,
-        rx2,
-        ry2,
-        nodes: singleRingNodes,
-        trunks: []
-      }
-    }
-
-    // Multi-node Symmetrical 4-Sector Architecture:
-    // Inner Ring: Top 4 providers (Top, Right, Bottom, Left)
-    // Outer Ring: Symmetrically distributed in the 4 diagonal gaps (Top-Right, Bottom-Right, Bottom-Left, Top-Left)
-    const sortedByUsage = [...displayProviders].sort(
-      (a, b) => (b.requests || 0) - (a.requests || 0) || a.name.localeCompare(b.name)
-    )
-    const innerIds = new Set(sortedByUsage.slice(0, 4).map((p) => p.id))
-    const innerRaw = displayProviders.filter((p) => innerIds.has(p.id))
-    const outerRaw = displayProviders.filter((p) => !innerIds.has(p.id))
-
-    // 4 Cardinal Inner Positions: Top (-90°), Right (0°), Bottom (90°), Left (180°)
-    const cardinalAngles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI]
-    // 4 Diagonal Corridor Angles (Sela-sela): Top-Right (-45°), Bottom-Right (45°), Bottom-Left (135°), Top-Left (-135°)
-    const corridorAngles = [-Math.PI / 4, Math.PI / 4, (3 * Math.PI) / 4, (-3 * Math.PI) / 4]
-
-    // Construct 4 Symmetrical Sector Trunks
-    const sectorTrunks: {
-      id: string
-      sectorIndex: number
-      trunkPath: string
-      forkPoint: { x: number; y: number }
-      tangent: { x: number; y: number }
-      isActive: boolean
-    }[] = []
-
-    for (let sIdx = 0; sIdx < 4; sIdx++) {
-      const cAngle = corridorAngles[sIdx]
-      // Trunk extends towards the corridor
-      const trunkTargetX = Math.cos(cAngle) * 200
-      const trunkTargetY = Math.sin(cAngle) * 200
-      const trunkSource = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, trunkTargetX, trunkTargetY)
-
-      // Fork Point F placed at distance 115px along corridor
-      const fx = Math.cos(cAngle) * 115
-      const fy = Math.sin(cAngle) * 75
-
-      const tdx = fx - trunkSource.x
-      const tdy = fy - trunkSource.y
-      const tdist = Math.hypot(tdx, tdy) || 1
-      const tnx = -tdy / tdist
-      const tny = tdx / tdist
-      const tbow = 18 * (sIdx % 2 === 0 ? 1 : -1)
-
-      // Smooth Cubic Trunk with deliberate curvature
-      const tcp1x = trunkSource.x + (tdx / tdist) * (tdist * 0.4) + tnx * tbow
-      const tcp1y = trunkSource.y + (tdy / tdist) * (tdist * 0.4) + tny * tbow
-      const tcp2x = fx - (tdx / tdist) * (tdist * 0.4) + tnx * (tbow * 0.5)
-      const tcp2y = fy - (tdy / tdist) * (tdist * 0.4) + tny * (tbow * 0.5)
-
-      // Normalized tangent at F (direction trunk is flowing into F)
-      const tanX = (fx - tcp2x) || (tdx / tdist)
-      const tanY = (fy - tcp2y) || (tdy / tdist)
-      const tanLen = Math.hypot(tanX, tanY) || 1
-      const normTanX = tanX / tanLen
-      const normTanY = tanY / tanLen
-
-      const trunkPath = `M ${trunkSource.x.toFixed(1)} ${trunkSource.y.toFixed(1)} C ${tcp1x.toFixed(1)} ${tcp1y.toFixed(1)}, ${tcp2x.toFixed(1)} ${tcp2y.toFixed(1)}, ${fx.toFixed(1)} ${fy.toFixed(1)}`
-
-      sectorTrunks.push({
-        id: `sector-${sIdx}`,
-        sectorIndex: sIdx,
-        trunkPath,
-        forkPoint: { x: fx, y: fy },
-        tangent: { x: normTanX, y: normTanY },
-        isActive: false
-      })
-    }
-
-    // 1. Calculate Inner Nodes (Cardinal Top, Right, Bottom, Left)
-    const innerCalculated = innerRaw.map((p, idx) => {
-      const angle = cardinalAngles[idx]
-      const x = rx1 * Math.cos(angle)
-      const y = ry1 * Math.sin(angle)
-      const status = checkStatus(p)
-
-      // Connect each inner node to its closest sector trunk
-      const sectorIdx = idx // 0: Top uses sector 0 (Top-Right), etc.
-      const trunk = sectorTrunks[sectorIdx]
-      const f = trunk.forkPoint
-      const tan = trunk.tangent
-
-      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, f.x, f.y)
-
-      const bdx = target.x - f.x
-      const bdy = target.y - f.y
-      const bdist = Math.hypot(bdx, bdy) || 1
-      const bnx = -bdy / bdist
-      const bny = bdx / bdist
-      const bbow = 22 * (idx % 2 === 0 ? 1 : -1)
-
-      // CONTINUOUS TANGENT FORK: Starts at F with trunk tangent `tan`, then curves into target
-      // This guarantees ZERO sharp angle / zero kink at F!
-      const bcp1x = f.x + tan.x * (bdist * 0.4) + bnx * (bbow * 0.4)
-      const bcp1y = f.y + tan.y * (bdist * 0.4) + bny * (bbow * 0.4)
-      const bcp2x = target.x - (bdx / bdist) * (bdist * 0.35) - bnx * bbow
-      const bcp2y = target.y - (bdy / bdist) * (bdist * 0.35) - bny * bbow
-
-      const branchSegment = `C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const fullCurvePath = `${trunk.trunkPath} ${branchSegment}`
-      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${f.x.toFixed(1)} ${f.y.toFixed(1)}`
-
-      if (status.isActive) {
-        trunk.isActive = true
-      }
+      const textIcon = (p.name || p.id || '?').slice(0, 2).toUpperCase()
 
       return {
         ...p,
-        ...status,
-        ring: 'inner' as const,
-        sectorIndex: sectorIdx,
         x,
         y,
-        curvePath: fullCurvePath,
-        branchPath: `M ${f.x.toFixed(1)} ${f.y.toFixed(1)} ${branchSegment}`,
+        isActive,
+        isLast,
+        isError,
+        curvePath,
         returnPath,
-        textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
-        color: p.color || '#38bdf8'
+        textIcon,
+        color: p.color || '#3b82f6'
       }
     })
 
-    // 2. Calculate Outer Nodes (Symmetrically distributed across the 4 Diagonal Corridors)
-    const outerCalculated = outerRaw.map((p, idx) => {
-      // Balanced distribution: round-robin across the 4 corridors
-      const sectorIdx = idx % 4
-      const trunk = sectorTrunks[sectorIdx]
-      const status = checkStatus(p)
-
-      // Corridor angle
-      const baseAngle = corridorAngles[sectorIdx]
-      const siblings = outerRaw.filter((_, oIdx) => oIdx % 4 === sectorIdx)
-      const sibIdx = siblings.findIndex((s) => s.id === p.id)
-      const sibCount = siblings.length
-
-      // Symmetrical fan-out inside the diagonal corridor (sela-sela)
-      const spread = Math.min(0.24, (0.6 * Math.PI) / Math.max(3, sibCount * 3))
-      const angle = baseAngle + (sibIdx - (sibCount - 1) / 2) * spread
-
-      const x = rx2 * Math.cos(angle)
-      const y = ry2 * Math.sin(angle)
-
-      const f = trunk.forkPoint
-      const tan = trunk.tangent
-
-      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, f.x, f.y)
-
-      const bdx = target.x - f.x
-      const bdy = target.y - f.y
-      const bdist = Math.hypot(bdx, bdy) || 1
-      const bnx = -bdy / bdist
-      const bny = bdx / bdist
-      const bbow = 26 * (sibIdx % 2 === 0 ? -1 : 1)
-
-      // CONTINUOUS TANGENT FORK: Starts at F along trunk tangent, then gracefully sweeps into target
-      const bcp1x = f.x + tan.x * (bdist * 0.42) + bnx * (bbow * 0.3)
-      const bcp1y = f.y + tan.y * (bdist * 0.42) + bny * (bbow * 0.3)
-      const bcp2x = target.x - (bdx / bdist) * (bdist * 0.38) + bnx * bbow
-      const bcp2y = target.y - (bdy / bdist) * (bdist * 0.38) + bny * bbow
-
-      const branchSegment = `C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const fullCurvePath = `${trunk.trunkPath} ${branchSegment}`
-      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${f.x.toFixed(1)} ${f.y.toFixed(1)}`
-
-      if (status.isActive) {
-        trunk.isActive = true
-      }
-
-      return {
-        ...p,
-        ...status,
-        ring: 'outer' as const,
-        sectorIndex: sectorIdx,
-        x,
-        y,
-        curvePath: fullCurvePath,
-        branchPath: `M ${f.x.toFixed(1)} ${f.y.toFixed(1)} ${branchSegment}`,
-        returnPath,
-        textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
-        color: p.color || '#94a3b8'
-      }
-    })
-
-    return {
-      rx1,
-      ry1,
-      rx2,
-      ry2,
-      nodes: [...innerCalculated, ...outerCalculated],
-      trunks: sectorTrunks
-    }
+    return { rx, ry, nodes }
   })
 
   function fitView() {
     if (!containerWidth || !containerHeight) return
-    const requiredWidth = 2 * geometry.rx2 + 200
-    const requiredHeight = 2 * geometry.ry2 + 130
+    const requiredWidth = 2 * geometry.rx + 240
+    const requiredHeight = 2 * geometry.ry + 140
     const scaleX = (containerWidth - 36) / requiredWidth
     const scaleY = (containerHeight - 36) / requiredHeight
-    zoom = Math.min(1.0, Math.max(0.45, Math.min(scaleX, scaleY)))
+    zoom = Math.min(1.0, Math.max(0.35, Math.min(scaleX, scaleY)))
     panX = 0
     panY = 0
   }
@@ -464,7 +251,7 @@
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         containerWidth = entry.contentRect.width || 900
-        containerHeight = entry.contentRect.height || 560
+        containerHeight = entry.contentRect.height || 520
         fitView()
       }
     })
@@ -476,7 +263,7 @@
 
 <div
   class="flex flex-col bg-[#06080e] border border-[#161d2d] rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-  style="height: 560px; contain: layout style paint;"
+  style="height: 520px; contain: layout style paint;"
 >
   <!-- Card Header with status, staged cardiac BPM & controls -->
   <div class="px-4 py-3 border-b border-[#161d2d] bg-[#0a0e18] flex items-center justify-between shrink-0">
@@ -486,7 +273,7 @@
       </div>
       <div class="min-w-0">
         <h2 class="text-xs font-bold text-slate-100 tracking-wider uppercase font-mono">Routing Topology</h2>
-        <p class="text-[11px] text-slate-400 truncate">Symmetrical dual-orbit branched bus</p>
+        <p class="text-[11px] text-slate-400 truncate">Gateway network & real-time routing</p>
       </div>
     </div>
 
@@ -496,7 +283,7 @@
       <div
         class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-all duration-500"
         style="background-color: {stageInfo.color}15; color: {stageInfo.color}; border-color: {stageInfo.color}35;"
-        title="Dynamic cardiac rhythm: serene 11 BPM on idle, speeds up with active stream load"
+        title="Dynamic cardiac rhythm: serene resting rhythm on idle, speeds up with active stream load"
       >
         <span class="material-symbols-outlined text-[14px] {activeCount > 0 ? 'animate-pulse' : ''}">ecg_heart</span>
         <span class="font-bold">{stageInfo.bpm} BPM</span>
@@ -584,7 +371,7 @@
       class="absolute inset-0 pointer-events-none"
       style="transform: translate3d({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px, 0) scale3d({zoom}, {zoom}, 1); transform-origin: 0 0; will-change: transform;"
     >
-      <!-- SVG Vector Layer for 2 Rings, Trunks, Non-Colliding Branches & Streams -->
+      <!-- SVG Vector Layer for Orbit, Fibers, Idle Traveling Dots & Active Streams -->
       <svg class="absolute inset-0 overflow-visible pointer-events-none">
         <defs>
           {#each geometry.nodes as node (node.id)}
@@ -597,96 +384,79 @@
           {/each}
         </defs>
 
-        <!-- Ring 1: Inner Orbit (Frequently Used Cardinal Providers) -->
-        <ellipse
-          cx="0"
-          cy="0"
-          rx={geometry.rx1}
-          ry={geometry.ry1}
-          fill="none"
-          stroke="#38bdf8"
-          stroke-width="1.1"
-          stroke-dasharray="4 6"
-          opacity="0.22"
-        />
-
-        <!-- Ring 2: Outer Orbit (Extended Diagonal Branched Corridor) -->
-        {#if geometry.rx2 > geometry.rx1}
+        <!-- Subtle architectural dashed orbit ring -->
+        {#if displayProviders.length > 0}
           <ellipse
             cx="0"
             cy="0"
-            rx={geometry.rx2}
-            ry={geometry.ry2}
+            rx={geometry.rx}
+            ry={geometry.ry}
             fill="none"
-            stroke="#64748b"
-            stroke-width="1.1"
+            stroke="#1e293b"
+            stroke-width="1.2"
             stroke-dasharray="6 8"
-            opacity="0.16"
+            opacity="0.35"
           />
         {/if}
 
-        <!-- 1. Ambient Branched Bus Lines (Smooth Béziers, NO straight lines) -->
-        <!-- Sector Trunks from Gateway to Fork Points F -->
-        {#each geometry.trunks as trunk (trunk.id)}
-          <path
-            d={trunk.trunkPath}
-            fill="none"
-            stroke={trunk.isActive ? '#38bdf8' : '#1e293b'}
-            stroke-width={trunk.isActive ? '1.8' : '1.2'}
-            stroke-dasharray={trunk.isActive ? 'none' : '4 5'}
-            opacity={trunk.isActive ? '0.85' : '0.4'}
-            class="transition-all duration-300"
-          />
-          <!-- Glowing Fork Junction Dot F -->
-          <circle
-            cx={trunk.forkPoint.x}
-            cy={trunk.forkPoint.y}
-            r={trunk.isActive ? '3.5' : '2.5'}
-            fill={trunk.isActive ? '#38bdf8' : '#1e293b'}
-            stroke={trunk.isActive ? '#38bdf8' : '#334155'}
-            stroke-width="1"
-            class="transition-all duration-300"
-          />
-        {/each}
-
-        <!-- Non-Colliding Branch Lines to Nodes through open corridors (sela-sela) -->
+        <!-- 1. Ambient Connected Fiber Lines: Pure continuous Cubic Bézier curves -->
         {#each geometry.nodes as node (node.id)}
           <path
-            d={node.branchPath}
+            d={node.curvePath}
             fill="none"
-            stroke={hoveredNodeId === node.id ? '#38bdf8' : node.isActive ? (node.color || '#38bdf8') : '#1e293b'}
-            stroke-width={hoveredNodeId === node.id || node.isActive ? '1.8' : '1.2'}
-            stroke-dasharray={hoveredNodeId === node.id || node.isActive ? 'none' : '4 5'}
-            opacity={hoveredNodeId === node.id || node.isActive ? '0.9' : '0.4'}
+            stroke={hoveredNodeId === node.id ? '#38bdf8' : '#1e293b'}
+            stroke-width={hoveredNodeId === node.id ? '2' : '1.2'}
+            stroke-dasharray={hoveredNodeId === node.id ? 'none' : '4 5'}
+            opacity={hoveredNodeId === node.id ? '0.9' : '0.4'}
             class="transition-all duration-300"
           />
         {/each}
 
-        <!-- 2. Concentric Radar Pulse Rings from Gateway (Slow & Serene on Idle) -->
+        <!-- 2. Concentric Radar Pulse Rings from Gateway -->
         <g class="topology-gateway-radar">
           <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-            <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" repeatCount="indefinite" />
+            <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" repeatCount="indefinite" />
             <animate attributeName="opacity" values={activeCount > 0 ? "0.75;0" : "0.25;0"} dur="{heartbeatDuration}s" repeatCount="indefinite" />
             <animate attributeName="stroke-width" values="2.2;0.2" dur="{heartbeatDuration}s" repeatCount="indefinite" />
           </circle>
 
           {#if stageLevel >= 2}
             <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-              <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.7;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="stroke-width" values="1.8;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
             </circle>
           {/if}
           {#if stageLevel >= 3}
             <circle cx="0" cy="0" r="32" fill="none" stroke="#38bdf8" opacity="0">
-              <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.65;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="stroke-width" values="1.6;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
             </circle>
           {/if}
         </g>
 
-        <!-- 3. Active Stream Laser Beams & Comets (ONLY rendered when isActive -> ZERO Idle CPU churn!) -->
+        <!-- 3. TRAVELING BLUE DOTS ON IDLE & ACTIVE (Staged Cascading Packet Waves) -->
+        {#each geometry.nodes as node, idx (node.id)}
+          <circle r="3" fill="#38bdf8" opacity="0">
+            <animateMotion
+              dur="{heartbeatDuration}s"
+              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
+              repeatCount="indefinite"
+              path={node.curvePath}
+            />
+            <animate
+              attributeName="opacity"
+              values="0;0.85;0.85;0"
+              keyTimes="0;0.15;0.85;1"
+              dur="{heartbeatDuration}s"
+              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
+              repeatCount="indefinite"
+            />
+          </circle>
+        {/each}
+
+        <!-- 4. Active Stream Laser Beams & Comets (Mounted when isActive) -->
         {#each geometry.nodes as node (node.id)}
           {#if node.isActive}
             <g class="topology-active-stream">
@@ -717,12 +487,12 @@
                 stroke-linecap="round"
                 class="topology-edge-flow-reverse"
               />
-              <!-- Token packet comets -->
-              <circle r="4" fill="#38bdf8" opacity="0">
+              <!-- High-energy token packet comets -->
+              <circle r="4.2" fill="#38bdf8" opacity="0">
                 <animateMotion dur="1.2s" repeatCount="indefinite" path={node.curvePath} />
                 <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.2s" repeatCount="indefinite" />
               </circle>
-              <circle r="3.4" fill="#34d399" opacity="0">
+              <circle r="3.6" fill="#34d399" opacity="0">
                 <animateMotion dur="1.4s" repeatCount="indefinite" path={node.returnPath} />
                 <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.4s" repeatCount="indefinite" />
               </circle>
@@ -779,7 +549,7 @@
         {/if}
       </div>
 
-      <!-- Provider Nodes (100% Stable Stationary Position, High-performance solid glass) -->
+      <!-- Provider Nodes stationed deterministically along orbit (w=168, h=42) -->
       {#each geometry.nodes as node (node.id)}
         <div
           role="button"
@@ -793,9 +563,7 @@
               ? '#38bdf8'
               : node.isLast
                 ? '#f59e0b'
-                : node.ring === 'inner'
-                  ? '#1e293b'
-                  : '#141c2c'}; box-shadow: {node.isActive
+                : '#1e293b'}; box-shadow: {node.isActive
             ? `0 0 16px ${node.color}40, 0 2px 6px rgba(0,0,0,0.5)`
             : hoveredNodeId === node.id
               ? '0 0 12px rgba(56,189,248,0.35)'
@@ -825,7 +593,7 @@
             </span>
           </div>
 
-          <!-- Active / Ring Badge -->
+          <!-- Active / Status Badge -->
           {#if node.isActive}
             <div class="flex items-center gap-1 shrink-0">
               <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/35">
@@ -836,9 +604,6 @@
             <span class="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
               Recent
             </span>
-          {:else if node.ring === 'inner'}
-            <!-- Frequently Used Indicator Dot -->
-            <span class="size-1.5 rounded-full bg-sky-400/80 shrink-0" title="Inner Orbit (Cardinal Primary)"></span>
           {:else}
             <span class="size-1.5 rounded-full bg-slate-600/50 shrink-0"></span>
           {/if}
@@ -849,27 +614,25 @@
     <!-- Empty State -->
     {#if displayProviders.length === 0}
       <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-xs text-slate-500">
-        No providers connected or routed across all history.
+        No providers connected or routed in this period.
       </div>
     {/if}
 
-    <!-- Bottom Legend & Info -->
+    <!-- Bottom Clean Legend & Info (Tanpa teks orbit alay) -->
     <div class="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
       <div class="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#0a0e18]/90 border border-[#161d2d] text-[10px] text-slate-400 shadow-lg pointer-events-auto font-mono">
         <span class="flex items-center gap-1.5">
-          <span class="size-2 rounded-full bg-sky-400"></span>
-          <span>Inner Orbit (Cardinal)</span>
+          <span class="size-2 rounded-full bg-emerald-400"></span>
+          <span>Live Routing</span>
         </span>
         <span class="flex items-center gap-1.5">
-          <span class="size-2 rounded-full bg-slate-500"></span>
-          <span>Outer Orbit (Diagonal Corridor)</span>
+          <span class="size-2 rounded-full bg-amber-400"></span>
+          <span>Recent</span>
         </span>
-        {#if activeCount > 0}
-          <span class="flex items-center gap-1.5">
-            <span class="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Live Stream</span>
-          </span>
-        {/if}
+        <span class="flex items-center gap-1.5">
+          <span class="size-2 rounded-full bg-slate-600"></span>
+          <span>Connected</span>
+        </span>
       </div>
       <span class="hidden sm:inline-block text-[10px] text-slate-500 bg-[#0a0e18]/80 px-2.5 py-1 rounded-md border border-[#161d2d]/60 font-mono">
         Drag to pan · Scroll to zoom
@@ -904,6 +667,6 @@
   }
 
   .gateway-cardiac-pulse {
-    animation: gateway-cardiac-pulse var(--hb-dur, 5.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: gateway-cardiac-pulse var(--hb-dur, 4.8s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 </style>
