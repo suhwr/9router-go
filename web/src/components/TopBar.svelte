@@ -6,7 +6,7 @@
   import MenuItem from '../lib/ui/MenuItem.svelte'
   import { type ActiveTab } from '../lib/router'
   import { promptInstall, subscribeInstallPrompt } from '../lib/pwa'
-  import { i18n } from '../lib/i18n'
+  import { i18n } from '../lib/i18n.svelte'
 
   let {
     activeTab = 'endpoint',

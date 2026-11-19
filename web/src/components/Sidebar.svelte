@@ -10,7 +10,7 @@
     loadSidebarPrefs,
   } from '../lib/sidebarPrefs.svelte'
   import { pinnedNavEntries } from '../lib/navFavorites.svelte'
-  import { i18n } from '../lib/i18n'
+  import { i18n } from '../lib/i18n.svelte'
 
   export type { ActiveTab }
   let {

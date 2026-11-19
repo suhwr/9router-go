@@ -14,28 +14,37 @@ registerServiceWorker()
 // When browser translates text, it must not translate the icon name inside
 // .material-symbols-outlined (e.g. "refresh" -> "Segarkan"), which breaks icon rendering.
 function protectIcons(node: Node) {
-  if (node instanceof HTMLElement) {
-    if (node.classList.contains('material-symbols-outlined')) {
-      node.setAttribute('translate', 'no')
-      node.classList.add('notranslate')
-    }
-    const icons = node.querySelectorAll('.material-symbols-outlined')
-    for (let i = 0; i < icons.length; i++) {
-      icons[i].setAttribute('translate', 'no')
-      icons[i].classList.add('notranslate')
-    }
-  }
-}
-if (typeof document !== 'undefined') {
-  protectIcons(document.documentElement)
-  const iconObserver = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (let i = 0; i < m.addedNodes.length; i++) {
-        protectIcons(m.addedNodes[i])
+  try {
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('material-symbols-outlined')) {
+        node.setAttribute('translate', 'no')
+        node.classList.add('notranslate')
+      }
+      const icons = node.querySelectorAll('.material-symbols-outlined')
+      for (let i = 0; i < icons.length; i++) {
+        icons[i].setAttribute('translate', 'no')
+        icons[i].classList.add('notranslate')
       }
     }
-  })
-  iconObserver.observe(document.documentElement, { childList: true, subtree: true })
+  } catch {
+    // Ignore any non-critical DOM inspection errors
+  }
+}
+
+try {
+  if (typeof document !== 'undefined') {
+    protectIcons(document.documentElement)
+    const iconObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (let i = 0; i < m.addedNodes.length; i++) {
+          protectIcons(m.addedNodes[i])
+        }
+      }
+    })
+    iconObserver.observe(document.documentElement, { childList: true, subtree: true })
+  }
+} catch {
+  // Graceful fallback if MutationObserver is restricted
 }
 
 const app = mount(App, {
