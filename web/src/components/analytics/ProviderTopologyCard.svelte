@@ -39,45 +39,22 @@
   )
 
   let activeCount = $derived.by(() => {
-    let count = activeRequests.reduce((sum, r) => sum + (r.count || 1), 0)
-    const now = Date.now()
-    for (const [id, expiry] of Object.entries(activePulseMap)) {
-      if (now < expiry) count++
+    let count = 0
+    for (const n of geometry.nodes) {
+      if (n.isActive) count++
     }
-    if (pulseProvider) count++
     return count
   })
 
-  // STAGED CARDIAC RHYTHM:
-  // Idle (0 active requests): Calm, serene, gentle breathing rhythm (~4.8s cycle / ~12 BPM).
-  // Active traffic: Progressively speeds up to match throughput.
-  let stageLevel = $derived.by(() => {
-    if (activeCount >= 6) return 4
-    if (activeCount >= 3) return 3
-    if (activeCount >= 1) return 2
-    return 1 // Idle / Resting
-  })
-
-  let heartbeatDuration = $derived.by(() => {
-    switch (stageLevel) {
-      case 4: return 0.95  // 126 BPM - Peak Overdrive
-      case 3: return 1.50  // 80 BPM  - Elevated Flow
-      case 2: return 2.40  // 50 BPM  - Active Rhythm
-      default: return 4.80 // 12 BPM  - Calm Resting Rhythm
-    }
-  })
-
+  // Smooth traffic flow status (no frantic BPM jumps)
   let stageInfo = $derived.by(() => {
-    switch (stageLevel) {
-      case 4:
-        return { label: 'Peak Overdrive', color: '#f43f5e', bpm: 126, numRings: 4 }
-      case 3:
-        return { label: 'Elevated Flow', color: '#06b6d4', bpm: 80, numRings: 3 }
-      case 2:
-        return { label: 'Active Rhythm', color: '#10b981', bpm: 50, numRings: 2 }
-      default:
-        return { label: 'Resting Rhythm', color: '#64748b', bpm: 12, numRings: 1 }
+    if (activeCount >= 5) {
+      return { label: 'Peak Flow', color: '#06b6d4' }
     }
+    if (activeCount >= 1) {
+      return { label: 'Live Routing', color: '#10b981' }
+    }
+    return { label: 'Standby', color: '#64748b' }
   })
 
   // Container sizing and fitView state
@@ -141,12 +118,36 @@
       const pid = p.id.toLowerCase().trim()
       const pname = (p.name || '').toLowerCase().trim()
       const palias = (p.alias || '').toLowerCase().trim()
+
+      const isCustomNode = pid.startsWith('openai-compatible-') || pid.startsWith('anthropic-compatible-')
+
       const isMatch = (target: string) => {
         if (!target) return false
         const t = target.toLowerCase().trim()
-        if (t === pid || (pname && t === pname) || (palias && t === palias)) return true
-        if (pid.includes(t) || t.includes(pid)) return true
-        if (pname && (pname.includes(t) || t.includes(pname))) return true
+
+        // 1. Exact ID or Catalog Alias match
+        if (t === pid || (palias && t === palias)) return true
+
+        // 2. Exact Display Name match
+        if (pname && t === pname) return true
+
+        const isTargetCustom = t.startsWith('openai-compatible-') || t.startsWith('anthropic-compatible-')
+
+        // 3. Strict Boundary Isolation:
+        // A custom compatible target can NEVER match official catalog providers (e.g. 'openai' or 'anthropic')
+        if (isTargetCustom && !isCustomNode) {
+          return false
+        }
+        // An official target ('openai', 'anthropic') can NEVER match a custom compatible node
+        if (!isTargetCustom && isCustomNode && (t === 'openai' || t === 'anthropic')) {
+          return false
+        }
+
+        // 4. Custom Node matching by suffix/UUID
+        if (isCustomNode) {
+          if (pid.endsWith(t) && t.length >= 8) return true
+        }
+
         return false
       }
 
@@ -297,33 +298,33 @@
       </div>
     </div>
 
-    <!-- Right Header Actions & Staged Heartbeat Monitor -->
+    <!-- Right Header Actions & Status -->
     <div class="flex items-center gap-2 shrink-0">
-      <!-- Staged Heartbeat Monitor Pill -->
+      <!-- Live Status Pill (Smooth transition, zero jerky BPM jumps) -->
       <div
-        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-all duration-500"
+        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-all duration-700 ease-out"
         style="background-color: {stageInfo.color}15; color: {stageInfo.color}; border-color: {stageInfo.color}35;"
-        title="Dynamic cardiac rhythm: serene resting rhythm on idle, speeds up with active stream load"
       >
-        <span class="material-symbols-outlined text-[14px] {activeCount > 0 ? 'animate-pulse' : ''}">ecg_heart</span>
-        <span class="font-bold">{stageInfo.bpm} BPM</span>
-        <span class="text-[10px] opacity-75 hidden md:inline">· {stageInfo.label}</span>
+        <span class="material-symbols-outlined text-[14px] {activeCount > 0 ? 'animate-pulse' : ''}">
+          {activeCount > 0 ? 'online_prediction' : 'sync_saved_locally'}
+        </span>
+        <span class="font-bold">{stageInfo.label}</span>
       </div>
 
       <!-- Active Streams Count -->
       <div
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium {activeCount > 0
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-700 ease-out {activeCount > 0
           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
           : 'bg-[#0e1320] text-slate-400 border border-[#1e293b]'}"
       >
         <span
-          class="size-1.5 rounded-full {activeCount > 0
+          class="size-1.5 rounded-full transition-colors duration-700 {activeCount > 0
             ? 'bg-emerald-400 animate-pulse'
             : 'bg-slate-500'}"
         ></span>
         <span class="font-mono">
           {activeCount > 0
-            ? `${activeCount} stream${activeCount > 1 ? 's' : ''}`
+            ? `${activeCount} active stream${activeCount > 1 ? 's' : ''}`
             : `${displayProviders.length} nodes`}
         </span>
       </div>
@@ -432,28 +433,21 @@
           />
         {/each}
 
-        <!-- 2. Concentric Radar Pulse Rings from Gateway -->
-        <g class="topology-gateway-radar">
-          <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-            <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values={activeCount > 0 ? "0.75;0" : "0.25;0"} dur="{heartbeatDuration}s" repeatCount="indefinite" />
-            <animate attributeName="stroke-width" values="2.2;0.2" dur="{heartbeatDuration}s" repeatCount="indefinite" />
+        <!-- 2. Concentric Radar Pulse Rings from Gateway (Fixed continuous 4.4s cycle, smooth fade, zero twitch) -->
+        <g
+          class="pointer-events-none transition-all duration-700 ease-out"
+          style="opacity: {activeCount > 0 ? 0.75 : 0.2}; stroke: {stageInfo.color};"
+        >
+          <circle cx="0" cy="0" r="32" fill="none" opacity="0">
+            <animate attributeName="r" values="32;120" dur="4.4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.75;0" dur="4.4s" repeatCount="indefinite" />
+            <animate attributeName="stroke-width" values="1.8;0.2" dur="4.4s" repeatCount="indefinite" />
           </circle>
-
-          {#if stageLevel >= 2}
-            <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-              <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.7;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="1.8;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
-            </circle>
-          {/if}
-          {#if stageLevel >= 3}
-            <circle cx="0" cy="0" r="32" fill="none" stroke="#38bdf8" opacity="0">
-              <animate attributeName="r" values="32;125" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.65;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="1.6;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
-            </circle>
-          {/if}
+          <circle cx="0" cy="0" r="32" fill="none" opacity="0">
+            <animate attributeName="r" values="32;120" dur="4.4s" begin="2.2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.75;0" dur="4.4s" begin="2.2s" repeatCount="indefinite" />
+            <animate attributeName="stroke-width" values="1.8;0.2" dur="4.4s" begin="2.2s" repeatCount="indefinite" />
+          </circle>
         </g>
 
         <!-- 3. Dynamic Streams with Smooth Fade In / Fade Out Transitions -->
@@ -523,12 +517,12 @@
         {/each}
       </svg>
 
-      <!-- Center Gateway Node (0, 0) with Staged Lub-Dub Cardiac Pulse -->
+      <!-- Center Gateway Node (0, 0) - Rock-solid stationary, zero scale twitch -->
       <div
-        class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 pointer-events-auto transition-all cursor-pointer gateway-cardiac-pulse {activeCount > 0
-          ? 'border-sky-400 bg-[#0d1424] text-white shadow-xl'
-          : 'border-[#1e293b] bg-[#0c111e] text-slate-100 shadow-md'}"
-        style="left: 0px; top: 0px; width: {ROUTER_W}px; height: {ROUTER_H}px; transform: translate(-50%, -50%); --hb-dur: {heartbeatDuration}s;"
+        class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 pointer-events-auto cursor-pointer transition-all duration-700 ease-out gateway-ambient-glow {activeCount > 0
+          ? 'border-sky-400 bg-[#0d1424] text-white shadow-[0_0_22px_rgba(56,189,248,0.4)]'
+          : 'border-[#1e293b] bg-[#0c111e] text-slate-100 shadow-[0_0_10px_rgba(56,189,248,0.12)]'}"
+        style="left: 0px; top: 0px; width: {ROUTER_W}px; height: {ROUTER_H}px; transform: translate(-50%, -50%);"
       >
         <img
           src={branding.config.appLogoUrl || branding.config.faviconUrl || '/favicon.svg'}
@@ -647,31 +641,17 @@
 </div>
 
 <style>
-  /* Lub-Dub Cardiac Pulse: Very gentle and slow on idle, energetic on active */
-  @keyframes gateway-cardiac-pulse {
-    0% {
-      transform: translate(-50%, -50%) scale(1);
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  /* Calm, continuous ambient glow - fixed duration, zero scale transform, zero layout twitch */
+  @keyframes gateway-ambient-glow {
+    0%, 100% {
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.12), inset 0 0 6px rgba(56, 189, 248, 0.05);
     }
-    14% {
-      transform: translate(-50%, -50%) scale(1.035);
-      box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
-    }
-    24% {
-      transform: translate(-50%, -50%) scale(1.01);
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
-    }
-    38% {
-      transform: translate(-50%, -50%) scale(1.05);
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.55);
-    }
-    56%, 100% {
-      transform: translate(-50%, -50%) scale(1);
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    50% {
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.22), inset 0 0 10px rgba(56, 189, 248, 0.1);
     }
   }
 
-  .gateway-cardiac-pulse {
-    animation: gateway-cardiac-pulse var(--hb-dur, 4.8s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  .gateway-ambient-glow {
+    animation: gateway-ambient-glow 4.8s ease-in-out infinite;
   }
 </style>
