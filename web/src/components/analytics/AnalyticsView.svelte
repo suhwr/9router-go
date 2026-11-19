@@ -467,12 +467,14 @@
       seen.add(canonical)
       if (cat?.alias) seen.add(cat.alias.toLowerCase())
 
+      const reqCount = (stats.byProvider?.[targetId]?.requests || stats.byProvider?.[canonical]?.requests || 0)
       list.push({
         id: targetId,
         alias: cat?.alias,
         name: topologyName(targetId, customName),
         color: cat?.color || '#3B82F6',
-        type
+        type,
+        requests: reqCount
       })
     }
 

@@ -10,6 +10,7 @@
     color?: string
     type?: string
     alias?: string
+    requests?: number
   }
 
   interface Props {
@@ -47,37 +48,35 @@
     Math.max(activeRequests.reduce((sum, r) => sum + (r.count || 1), 0), hasPulse ? 1 : 0)
   )
 
-  // STAGED CARDIAC RHYTHM (Bertahap sesuai jumlah koneksi & beban aktif)
-  // Stage 1 (Resting): 0 active, <= 4 providers -> 3.2s (37 BPM)
-  // Stage 2 (Nominal): 1-2 active or 5-9 providers -> 2.1s (57 BPM)
-  // Stage 3 (Elevated): 3-5 active or 10-15 providers -> 1.45s (83 BPM)
-  // Stage 4 (Peak): 6+ active or 16+ providers -> 0.92s (130 BPM)
+  // STAGED CARDIAC RHYTHM:
+  // Idle (0 active requests): Very calm, tranquil, slow resting breath (5.5s cycle / ~11 BPM).
+  // Active traffic: Awakens progressively to match throughput without CPU churn.
   let stageLevel = $derived.by(() => {
-    if (activeCount >= 5 || displayProviders.length >= 16) return 4
-    if (activeCount >= 2 || displayProviders.length >= 9) return 3
-    if (activeCount >= 1 || displayProviders.length >= 4) return 2
-    return 1
+    if (activeCount >= 6) return 4
+    if (activeCount >= 3) return 3
+    if (activeCount >= 1) return 2
+    return 1 // Idle / Resting
   })
 
   let heartbeatDuration = $derived.by(() => {
     switch (stageLevel) {
-      case 4: return 0.92
-      case 3: return 1.45
-      case 2: return 2.10
-      default: return 3.20
+      case 4: return 0.95  // 126 BPM - Peak Overdrive
+      case 3: return 1.50  // 80 BPM  - Elevated Flow
+      case 2: return 2.40  // 50 BPM  - Active Rhythm
+      default: return 5.50 // 11 BPM  - Calm Resting Standby
     }
   })
 
   let stageInfo = $derived.by(() => {
     switch (stageLevel) {
       case 4:
-        return { label: 'Peak Overdrive', color: '#f43f5e', bpm: 130, numRings: 4 }
+        return { label: 'Peak Overdrive', color: '#f43f5e', bpm: 126, numRings: 4 }
       case 3:
-        return { label: 'Elevated Flow', color: '#06b6d4', bpm: 83, numRings: 3 }
+        return { label: 'Elevated Flow', color: '#06b6d4', bpm: 80, numRings: 3 }
       case 2:
-        return { label: 'Active Pulse', color: '#10b981', bpm: 57, numRings: 2 }
+        return { label: 'Active Rhythm', color: '#10b981', bpm: 50, numRings: 2 }
       default:
-        return { label: 'Resting Rhythm', color: '#64748b', bpm: 37, numRings: 1 }
+        return { label: 'Resting Standby', color: '#64748b', bpm: 11, numRings: 1 }
     }
   })
 
@@ -86,7 +85,7 @@
   let containerWidth = $state(800)
   let containerHeight = $state(480)
 
-  // Zoom & Pan transforms
+  // Zoom & Pan transforms with hardware acceleration
   let zoom = $state(0.85)
   let panX = $state(0)
   let panY = $state(0)
@@ -106,7 +105,6 @@
   /**
    * Calculates the exact border intersection point on a rectangle centered at (cx, cy)
    * with dimensions (w, h) in the direction towards (targetX, targetY).
-   * Guarantees lines snap seamlessly to card edges without floating gaps.
    */
   function getRectBorderPoint(cx: number, cy: number, w: number, h: number, targetX: number, targetY: number) {
     const dx = targetX - cx
@@ -120,103 +118,205 @@
     return { x: cx + dx * s, y: cy + dy * s }
   }
 
-  // Layout calculation: deterministic ellipse orbit with dynamic cubic Bézier S-curves & bus routing
+  // 2-CONCENTRIC RINGS & BRANCHING BUS TOPOLOGY GEOMETRY
+  // Ring 1 (Inner): Frequently used providers (most requests, active, recent).
+  // Ring 2 (Outer): Extended providers branching off from their parent sector trunk.
   let geometry = $derived.by(() => {
-    const s = displayProviders.length
-    const rx = Math.max(300, (200 * s) / (2 * Math.PI))
-    const ry = Math.max(180, 0.54 * rx)
+    const total = displayProviders.length
+    if (total === 0) {
+      return { rx1: 240, ry1: 140, rx2: 410, ry2: 240, nodes: [], trunks: [] }
+    }
 
-    const nodes = displayProviders.map((p, idx) => {
-      // Deterministic angle based on fixed index in sorted list
-      const angle = -Math.PI / 2 + (2 * Math.PI * idx) / s
-      const x = rx * Math.cos(angle)
-      const y = ry * Math.sin(angle)
-
+    // 1. Score each provider by frequency of use
+    const scoredList = displayProviders.map((p) => {
       const pid = p.id.toLowerCase().trim()
       const pname = (p.name || '').toLowerCase().trim()
       const palias = (p.alias || '').toLowerCase().trim()
-      const isProviderMatch = (target: string) => {
+      const isMatch = (target: string) => {
         if (!target) return false
         const t = target.toLowerCase().trim()
         return t === pid || t === pname || (Boolean(palias) && t === palias)
       }
-
       const isActive =
         activeProviderIds.has(pid) ||
         activeProviderIds.has(pname) ||
         (Boolean(palias) && activeProviderIds.has(palias)) ||
-        (hasPulse && isProviderMatch(pulseProvider))
-      const isLast = !isActive && Boolean(lastProvider) && isProviderMatch(lastProvider)
-      const isError = !isActive && Boolean(errorProvider) && isProviderMatch(errorProvider)
+        (hasPulse && isMatch(pulseProvider))
+      const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
+      const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
 
-      // Exact pixel-perfect border points
-      const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
-      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, 0, 0)
-
-      // Dynamic Non-Monotonous Cubic Bézier Calculation:
-      // Combines natural launch/dock face tangents, direct velocity, and index-based harmonic waves.
-      const dx = target.x - source.x
-      const dy = target.y - source.y
-      const dist = Math.hypot(dx, dy) || 1
-      const nx = -dy / dist
-      const ny = dx / dist
-
-      // Router launch tangent: horizontal from flanks vs vertical from top/bottom
-      const isRouterHorizontal = Math.abs(source.x) >= ROUTER_W / 2 - 1.5
-      const launchDirX = isRouterHorizontal ? Math.sign(source.x) : 0
-      const launchDirY = isRouterHorizontal ? 0 : Math.sign(source.y)
-
-      // Provider dock tangent: horizontal from sides vs vertical from top/bottom
-      const relTargetX = target.x - x
-      const relTargetY = target.y - y
-      const isTargetHorizontal = Math.abs(relTargetX) >= PROVIDER_W / 2 - 1.5
-      const dockDirX = isTargetHorizontal ? -Math.sign(relTargetX) : 0
-      const dockDirY = isTargetHorizontal ? 0 : -Math.sign(relTargetY)
-
-      const span = Math.min(95, Math.max(30, dist * 0.38))
-
-      // Harmonic wave unique to each index to give varied S-curves and prevent monotonous arcs
-      const waveMagnitude = Math.sin(idx * 1.85 + 0.45) * Math.min(24, dist * 0.08)
-      const waveX = nx * waveMagnitude
-      const waveY = ny * waveMagnitude
-
-      // CP1 launches along router face with forward momentum + wave harmonic
-      const cp1x = source.x + (launchDirX * 0.72 + (dx / dist) * 0.28) * span + waveX * 1.15
-      const cp1y = source.y + (launchDirY * 0.72 + (dy / dist) * 0.28) * span + waveY * 1.15
-
-      // CP2 docks into provider face with reverse momentum - wave harmonic
-      const cp2x = target.x - (dockDirX * 0.72 + (dx / dist) * 0.28) * span - waveX * 0.85
-      const cp2y = target.y - (dockDirY * 0.72 + (dy / dist) * 0.28) * span - waveY * 0.85
-
-      const curvePath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
-
-      const textIcon = (p.name || p.id || '?').slice(0, 2).toUpperCase()
+      let score = p.requests || 0
+      if (isActive) score += 10000
+      if (isLast) score += 5000
+      if (isError) score += 1000
 
       return {
         ...p,
-        x,
-        y,
+        pid,
         isActive,
         isLast,
         isError,
-        curvePath,
-        returnPath,
-        textIcon,
-        color: p.color || '#3b82f6'
+        score
       }
     })
 
-    return { rx, ry, nodes }
+    // 2. Separate into Inner Ring (frequently used) and Outer Ring (secondary)
+    let innerCount = total
+    if (total > 4) {
+      innerCount = Math.min(6, Math.max(3, Math.ceil(total * 0.38)))
+    }
+
+    // Sort by score descending to pick top inner nodes
+    const sortedByUsage = [...scoredList].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    const innerSet = new Set<string>(sortedByUsage.slice(0, innerCount).map((p) => p.id))
+
+    // Sort inner and outer deterministically by name so positions stay rock-solid
+    const innerNodesRaw = scoredList.filter((p) => innerSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+    const outerNodesRaw = scoredList.filter((p) => !innerSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+
+    const numInner = innerNodesRaw.length
+    const rx1 = Math.max(240, 180 + numInner * 16)
+    const ry1 = Math.max(140, 0.54 * rx1)
+
+    const rx2 = rx1 + 175
+    const ry2 = ry1 + 105
+
+    // 3. Position Inner Nodes on Ring 1
+    const sectorTrunks: {
+      id: string
+      sectorIndex: number
+      innerNodeId: string
+      angle: number
+      trunkPath: string
+      junction: { x: number; y: number }
+      isActive: boolean
+    }[] = []
+
+    const innerCalculated = innerNodesRaw.map((p, idx) => {
+      const angle = -Math.PI / 2 + (2 * Math.PI * idx) / numInner
+      const x = rx1 * Math.cos(angle)
+      const y = ry1 * Math.sin(angle)
+
+      const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
+      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, 0, 0)
+
+      // Branching Junction Point J placed at 62% of distance along the sector ray
+      const jx = source.x * 0.38 + target.x * 0.62
+      const jy = source.y * 0.38 + target.y * 0.62
+
+      // Main Trunk Path from Gateway to Junction J
+      const dx = jx - source.x
+      const dy = jy - source.y
+      const dist = Math.hypot(dx, dy) || 1
+      const isHorizontal = Math.abs(source.x) >= ROUTER_W / 2 - 1.5
+      const lDirX = isHorizontal ? Math.sign(source.x) : 0
+      const lDirY = isHorizontal ? 0 : Math.sign(source.y)
+      const span = Math.min(60, dist * 0.45)
+      const cp1x = source.x + (lDirX * 0.75 + (dx / dist) * 0.25) * span
+      const cp1y = source.y + (lDirY * 0.75 + (dy / dist) * 0.25) * span
+      const cp2x = jx - (dx / dist) * span * 0.5
+      const cp2y = jy - (dy / dist) * span * 0.5
+
+      const trunkPath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${jx.toFixed(1)} ${jy.toFixed(1)}`
+
+      // Short branch from Junction J into Inner Node
+      const branchToInner = `M ${jx.toFixed(1)} ${jy.toFixed(1)} L ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const fullCurvePath = `${trunkPath} L ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} C ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
+
+      sectorTrunks.push({
+        id: `trunk-${p.id}`,
+        sectorIndex: idx,
+        innerNodeId: p.id,
+        angle,
+        trunkPath,
+        junction: { x: jx, y: jy },
+        isActive: p.isActive
+      })
+
+      return {
+        ...p,
+        ring: 'inner' as const,
+        sectorIndex: idx,
+        x,
+        y,
+        curvePath: fullCurvePath,
+        branchPath: branchToInner,
+        returnPath,
+        textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
+        color: p.color || '#38bdf8'
+      }
+    })
+
+    // 4. Position Outer Nodes on Ring 2 (Branching from sector trunks)
+    const numOuter = outerNodesRaw.length
+    const outerCalculated = outerNodesRaw.map((p, idx) => {
+      // Assign outer node to an inner sector
+      const sectorIndex = idx % numInner
+      const parentTrunk = sectorTrunks[sectorIndex]
+      const siblingsInSector = outerNodesRaw.filter((_, oIdx) => oIdx % numInner === sectorIndex)
+      const siblingPos = siblingsInSector.findIndex((s) => s.id === p.id)
+      const totalSiblings = siblingsInSector.length
+
+      // Fan-out angle around parent sector angle
+      const spread = Math.min(0.38, Math.PI / (numInner * (totalSiblings + 1)))
+      const angle = parentTrunk.angle + (siblingPos - (totalSiblings - 1) / 2) * spread
+
+      const x = rx2 * Math.cos(angle)
+      const y = ry2 * Math.sin(angle)
+
+      const j = parentTrunk.junction
+      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, j.x, j.y)
+
+      // Outer Branch Path from Junction J to Outer Node
+      const bdx = target.x - j.x
+      const bdy = target.y - j.y
+      const bdist = Math.hypot(bdx, bdy) || 1
+      const bSpan = Math.min(85, bdist * 0.4)
+      const bcp1x = j.x + (bdx / bdist) * bSpan
+      const bcp1y = j.y + (bdy / bdist) * bSpan
+      const bcp2x = target.x - (bdx / bdist) * bSpan * 0.8
+      const bcp2y = target.y - (bdy / bdist) * bSpan * 0.8
+
+      const branchPath = `M ${j.x.toFixed(1)} ${j.y.toFixed(1)} C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const fullCurvePath = `${parentTrunk.trunkPath} C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${j.x.toFixed(1)} ${j.y.toFixed(1)}`
+
+      if (p.isActive) {
+        parentTrunk.isActive = true
+      }
+
+      return {
+        ...p,
+        ring: 'outer' as const,
+        sectorIndex,
+        x,
+        y,
+        curvePath: fullCurvePath,
+        branchPath,
+        returnPath,
+        textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
+        color: p.color || '#94a3b8'
+      }
+    })
+
+    return {
+      rx1,
+      ry1,
+      rx2,
+      ry2,
+      nodes: [...innerCalculated, ...outerCalculated],
+      trunks: sectorTrunks
+    }
   })
 
   function fitView() {
     if (!containerWidth || !containerHeight) return
-    const requiredWidth = 2 * geometry.rx + 240
-    const requiredHeight = 2 * geometry.ry + 140
+    const requiredWidth = 2 * geometry.rx2 + 250
+    const requiredHeight = 2 * geometry.ry2 + 160
     const scaleX = (containerWidth - 36) / requiredWidth
     const scaleY = (containerHeight - 36) / requiredHeight
-    zoom = Math.min(1.05, Math.max(0.18, Math.min(scaleX, scaleY)))
+    zoom = Math.min(1.0, Math.max(0.18, Math.min(scaleX, scaleY)))
     panX = 0
     panY = 0
   }
@@ -275,7 +375,7 @@
 
 <div
   class="flex flex-col bg-[#06080e] border border-[#161d2d] rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-  style="height: 480px"
+  style="height: 480px; contain: layout style paint;"
 >
   <!-- Card Header with status, staged cardiac BPM & controls -->
   <div class="px-4 py-3 border-b border-[#161d2d] bg-[#0a0e18] flex items-center justify-between shrink-0">
@@ -285,7 +385,7 @@
       </div>
       <div class="min-w-0">
         <h2 class="text-xs font-bold text-slate-100 tracking-wider uppercase font-mono">Routing Topology</h2>
-        <p class="text-[11px] text-slate-400 truncate">Gateway network & real-time routing</p>
+        <p class="text-[11px] text-slate-400 truncate">Dual-orbit branched gateway bus</p>
       </div>
     </div>
 
@@ -293,11 +393,11 @@
     <div class="flex items-center gap-2 shrink-0">
       <!-- Staged Heartbeat Monitor Pill -->
       <div
-        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-all duration-300"
+        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-all duration-500"
         style="background-color: {stageInfo.color}15; color: {stageInfo.color}; border-color: {stageInfo.color}35;"
-        title="Dynamic cardiac rhythm staged by active stream load and connected provider count"
+        title="Dynamic cardiac rhythm: serene 11 BPM on idle, speeds up with active stream load"
       >
-        <span class="material-symbols-outlined text-[14px] animate-pulse">ecg_heart</span>
+        <span class="material-symbols-outlined text-[14px] {activeCount > 0 ? 'animate-pulse' : ''}">ecg_heart</span>
         <span class="font-bold">{stageInfo.bpm} BPM</span>
         <span class="text-[10px] opacity-75 hidden md:inline">· {stageInfo.label}</span>
       </div>
@@ -371,181 +471,187 @@
     role="region"
     aria-label="Provider topology map"
     class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing"
-    style="background-color: #05070c; background-image: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 68%), radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 100% 100%, 26px 26px;"
+    style="background-color: #05070c; background-image: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.04) 0%, transparent 68%), radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 100% 100%, 28px 28px;"
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
     onpointercancel={handlePointerUp}
     onwheel={handleWheel}
   >
-    <!-- Centered Viewport Layer -->
+    <!-- Centered Viewport Layer (GPU hardware accelerated) -->
     <div
       class="absolute inset-0 pointer-events-none"
-      style="transform: translate({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px) scale({zoom}); transform-origin: 0 0;"
+      style="transform: translate3d({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px, 0) scale3d({zoom}, {zoom}, 1); transform-origin: 0 0; will-change: transform;"
     >
-      <!-- SVG Vector Layer for Orbit, Network Fibers, Radar & Streams -->
-      <svg class="absolute inset-0 overflow-visible pointer-events-none" style="transform: translate(0, 0);">
+      <!-- SVG Vector Layer for 2 Rings, Trunks, Branches & Active Streams -->
+      <svg class="absolute inset-0 overflow-visible pointer-events-none">
         <defs>
           {#each geometry.nodes as node (node.id)}
-            <linearGradient id="active-beam-{node.id}" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95" />
-              <stop offset="100%" stop-color={node.color || '#22d3ee'} stop-opacity="1" />
-            </linearGradient>
+            {#if node.isActive}
+              <linearGradient id="active-beam-{node.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95" />
+                <stop offset="100%" stop-color={node.color || '#22d3ee'} stop-opacity="1" />
+              </linearGradient>
+            {/if}
           {/each}
         </defs>
 
-        <!-- Subtle architectural dashed orbit ring -->
-        {#if displayProviders.length > 0}
+        <!-- Ring 1: Inner Orbit (Frequently Used Providers) -->
+        <ellipse
+          cx="0"
+          cy="0"
+          rx={geometry.rx1}
+          ry={geometry.ry1}
+          fill="none"
+          stroke="#38bdf8"
+          stroke-width="1.1"
+          stroke-dasharray="4 6"
+          opacity="0.22"
+        />
+
+        <!-- Ring 2: Outer Orbit (Extended Branched Providers) -->
+        {#if geometry.rx2 > geometry.rx1}
           <ellipse
             cx="0"
             cy="0"
-            rx={geometry.rx}
-            ry={geometry.ry}
+            rx={geometry.rx2}
+            ry={geometry.ry2}
             fill="none"
-            stroke="#1e293b"
-            stroke-width="1.2"
+            stroke="#64748b"
+            stroke-width="1.1"
             stroke-dasharray="6 8"
-            opacity="0.4"
+            opacity="0.16"
           />
         {/if}
 
-        <!-- 1. Ambient Connected Fiber Lines (S-curves / filleted bus traces) -->
-        {#each geometry.nodes as node (node.id)}
+        <!-- 1. Ambient Branched Bus Lines -->
+        <!-- Sector Trunks from Gateway to Junction Points J -->
+        {#each geometry.trunks as trunk (trunk.id)}
           <path
-            d={node.curvePath}
+            d={trunk.trunkPath}
             fill="none"
-            stroke={hoveredNodeId === node.id ? '#38bdf8' : '#1e293b'}
-            stroke-width={hoveredNodeId === node.id ? '2' : '1.2'}
-            stroke-dasharray={hoveredNodeId === node.id ? 'none' : '4 5'}
-            opacity={hoveredNodeId === node.id ? '0.9' : '0.45'}
+            stroke={trunk.isActive ? '#38bdf8' : '#1e293b'}
+            stroke-width={trunk.isActive ? '1.8' : '1.2'}
+            stroke-dasharray={trunk.isActive ? 'none' : '4 5'}
+            opacity={trunk.isActive ? '0.85' : '0.4'}
+            class="transition-all duration-300"
+          />
+          <!-- Glowing Junction Node J -->
+          <circle
+            cx={trunk.junction.x}
+            cy={trunk.junction.y}
+            r={trunk.isActive ? '3.5' : '2.5'}
+            fill={trunk.isActive ? '#38bdf8' : '#1e293b'}
+            stroke={trunk.isActive ? '#38bdf8' : '#334155'}
+            stroke-width="1"
             class="transition-all duration-300"
           />
         {/each}
 
-        <!-- 2. Concentric Radar Pulse Rings from Gateway staged by stageLevel -->
+        <!-- Branch Lines to Nodes -->
+        {#each geometry.nodes as node (node.id)}
+          <path
+            d={node.branchPath}
+            fill="none"
+            stroke={hoveredNodeId === node.id ? '#38bdf8' : node.isActive ? (node.color || '#38bdf8') : '#1e293b'}
+            stroke-width={hoveredNodeId === node.id || node.isActive ? '1.8' : '1.2'}
+            stroke-dasharray={hoveredNodeId === node.id || node.isActive ? 'none' : '4 5'}
+            opacity={hoveredNodeId === node.id || node.isActive ? '0.9' : '0.4'}
+            class="transition-all duration-300"
+          />
+        {/each}
+
+        <!-- 2. Concentric Radar Pulse Rings from Gateway (Slow & Serene on Idle) -->
         <g class="topology-gateway-radar">
-          <!-- Primary Heartbeat Sonar Ring -->
           <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-            <animate attributeName="r" values="32;135" dur="{heartbeatDuration}s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.75;0" dur="{heartbeatDuration}s" repeatCount="indefinite" />
-            <animate attributeName="stroke-width" values="2.4;0.2" dur="{heartbeatDuration}s" repeatCount="indefinite" />
+            <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values={activeCount > 0 ? "0.75;0" : "0.25;0"} dur="{heartbeatDuration}s" repeatCount="indefinite" />
+            <animate attributeName="stroke-width" values="2.2;0.2" dur="{heartbeatDuration}s" repeatCount="indefinite" />
           </circle>
 
-          <!-- Staged Secondary Waves -->
           {#if stageLevel >= 2}
             <circle cx="0" cy="0" r="32" fill="none" stroke={stageInfo.color} opacity="0">
-              <animate attributeName="r" values="32;135" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.7;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="2.0;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="stroke-width" values="1.8;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.35).toFixed(2)}s" repeatCount="indefinite" />
             </circle>
           {/if}
           {#if stageLevel >= 3}
             <circle cx="0" cy="0" r="32" fill="none" stroke="#38bdf8" opacity="0">
-              <animate attributeName="r" values="32;135" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="r" values="32;130" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.65;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="1.8;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
-            </circle>
-          {/if}
-          {#if stageLevel >= 4}
-            <circle cx="0" cy="0" r="32" fill="none" stroke="#f43f5e" opacity="0">
-              <animate attributeName="r" values="32;135" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.82).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.75;0" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.82).toFixed(2)}s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="2.2;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.82).toFixed(2)}s" repeatCount="indefinite" />
+              <animate attributeName="stroke-width" values="1.6;0.2" dur="{heartbeatDuration}s" begin="{(heartbeatDuration * 0.65).toFixed(2)}s" repeatCount="indefinite" />
             </circle>
           {/if}
         </g>
 
-        <!-- 3. Staged Heartbeat Ripple Cascading to Connected Nodes in Sequence -->
-        {#each geometry.nodes as node, idx (node.id)}
-          <circle r="2.5" fill={stageInfo.color} opacity="0">
-            <animateMotion
-              dur="{heartbeatDuration}s"
-              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
-              repeatCount="indefinite"
-              path={node.curvePath}
-            />
-            <animate
-              attributeName="opacity"
-              values="0;0.7;0.7;0"
-              keyTimes="0;0.2;0.8;1"
-              dur="{heartbeatDuration}s"
-              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
-              repeatCount="indefinite"
-            />
-          </circle>
-        {/each}
-
-        <!-- 4. Active, Recent, or Error Streams with Smooth Fade Transitions (NO Pop-in) -->
+        <!-- 3. Active Stream Laser Beams & Comets (ONLY rendered when isActive -> ZERO Idle CPU churn!) -->
         {#each geometry.nodes as node (node.id)}
-          <g
-            class="transition-opacity duration-700 ease-out"
-            style="opacity: {node.isActive ? 1 : 0}; pointer-events: none;"
-          >
-            <!-- Wide neon ambient glow aura -->
-            <path
-              d={node.curvePath}
-              fill="none"
-              stroke={node.color || '#3b82f6'}
-              stroke-width="8"
-              stroke-opacity="0.25"
-              stroke-linecap="round"
-            />
-            <!-- Laser forward energy beam -->
-            <path
-              d={node.curvePath}
-              fill="none"
-              stroke="url(#active-beam-{node.id})"
-              stroke-width="3"
-              stroke-linecap="round"
-              class="topology-edge-flow"
-            />
-            <!-- Emerald return stream -->
-            <path
-              d={node.returnPath}
-              fill="none"
-              stroke="#10b981"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              class="topology-edge-flow-reverse"
-            />
-            <!-- Smooth flowing token packet comets with progressive opacity fade -->
-            <circle r="4.2" fill="#38bdf8" opacity="0">
-              <animateMotion dur="1.2s" repeatCount="indefinite" path={node.curvePath} />
-              <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.2s" repeatCount="indefinite" />
-            </circle>
-            <circle r="3.6" fill="#34d399" opacity="0">
-              <animateMotion dur="1.4s" repeatCount="indefinite" path={node.returnPath} />
-              <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.4s" repeatCount="indefinite" />
-            </circle>
-          </g>
-
-          {#if !node.isActive && node.isLast}
+          {#if node.isActive}
+            <g class="topology-active-stream">
+              <!-- Wide neon ambient glow aura -->
+              <path
+                d={node.curvePath}
+                fill="none"
+                stroke={node.color || '#3b82f6'}
+                stroke-width="7"
+                stroke-opacity="0.28"
+                stroke-linecap="round"
+              />
+              <!-- Laser forward energy beam -->
+              <path
+                d={node.curvePath}
+                fill="none"
+                stroke="url(#active-beam-{node.id})"
+                stroke-width="2.6"
+                stroke-linecap="round"
+                class="topology-edge-flow"
+              />
+              <!-- Emerald return stream -->
+              <path
+                d={node.returnPath}
+                fill="none"
+                stroke="#10b981"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                class="topology-edge-flow-reverse"
+              />
+              <!-- Token packet comets -->
+              <circle r="4" fill="#38bdf8" opacity="0">
+                <animateMotion dur="1.2s" repeatCount="indefinite" path={node.curvePath} />
+                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <circle r="3.4" fill="#34d399" opacity="0">
+                <animateMotion dur="1.4s" repeatCount="indefinite" path={node.returnPath} />
+                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.4s" repeatCount="indefinite" />
+              </circle>
+            </g>
+          {:else if node.isLast}
             <!-- Warm amber recent trace -->
             <path
               d={node.curvePath}
               fill="none"
               stroke="#f59e0b"
-              stroke-width="2.2"
+              stroke-width="1.8"
               stroke-dasharray="4 4"
-              opacity="0.75"
-              class="topology-edge-flow transition-opacity duration-500"
+              opacity="0.7"
+              class="topology-edge-flow"
             />
-          {:else if !node.isActive && node.isError}
+          {:else if node.isError}
             <!-- Red error trace -->
             <path
               d={node.curvePath}
               fill="none"
               stroke="#ef4444"
-              stroke-width="2.5"
+              stroke-width="2"
               stroke-dasharray="4 4"
-              opacity="0.85"
-              class="transition-opacity duration-500"
+              opacity="0.8"
             />
           {/if}
         {/each}
       </svg>
 
-      <!-- Center Gateway Node (0, 0) with Cardiac Lub-Dub Systolic Beat -->
+      <!-- Center Gateway Node (0, 0) with Staged Lub-Dub Cardiac Pulse -->
       <div
         class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 pointer-events-auto transition-all cursor-pointer gateway-cardiac-pulse {activeCount > 0
           ? 'border-sky-400 bg-[#0d1424] text-white shadow-xl'
@@ -572,31 +678,33 @@
         {/if}
       </div>
 
-      <!-- Provider Nodes stationed deterministically along orbit with exact dimensions w=168, h=42 -->
+      <!-- Provider Nodes (High-performance solid glass without expensive backdrop-filter lag) -->
       {#each geometry.nodes as node (node.id)}
         <div
           role="button"
           tabindex="0"
           onmouseenter={() => (hoveredNodeId = node.id)}
           onmouseleave={() => (hoveredNodeId = null)}
-          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all duration-300 bg-[#090d16]/95 backdrop-blur shadow-xs hover:shadow-xl hover:scale-105 pointer-events-auto cursor-pointer"
+          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all duration-200 bg-[#0c101b] shadow-sm hover:scale-105 pointer-events-auto cursor-pointer"
           style="left: {node.x}px; top: {node.y}px; width: {PROVIDER_W}px; height: {PROVIDER_H}px; transform: translate(-50%, -50%); border-color: {node.isActive
             ? (node.color || '#3b82f6')
             : hoveredNodeId === node.id
               ? '#38bdf8'
               : node.isLast
                 ? '#f59e0b'
-                : '#172133'}; box-shadow: {node.isActive
-            ? `0 0 18px ${node.color}40, 0 2px 8px rgba(0,0,0,0.5)`
+                : node.ring === 'inner'
+                  ? '#1e293b'
+                  : '#141c2c'}; box-shadow: {node.isActive
+            ? `0 0 16px ${node.color}40, 0 2px 6px rgba(0,0,0,0.5)`
             : hoveredNodeId === node.id
-              ? '0 0 14px rgba(56,189,248,0.35)'
+              ? '0 0 12px rgba(56,189,248,0.35)'
               : node.isLast
-                ? '0 0 10px rgba(245, 158, 11, 0.25)'
+                ? '0 0 8px rgba(245, 158, 11, 0.25)'
                 : 'none'};"
         >
           <div
             class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
-            style="background-color: {node.color}22;"
+            style="background-color: {node.color}20;"
           >
             {#if !imageErrors[node.id]}
               <ProviderArtwork id={node.id} class="w-5 h-5 rounded-sm object-contain" />
@@ -606,15 +714,17 @@
               </span>
             {/if}
           </div>
-          <span
-            class="text-xs font-semibold truncate flex-1"
-            style="color: {node.isActive ? (node.color || '#f1f5f9') : '#cbd5e1'}"
-            title={node.name}
-          >
-            {node.name}
-          </span>
+          <div class="min-w-0 flex-1">
+            <span
+              class="text-xs font-semibold truncate block"
+              style="color: {node.isActive ? (node.color || '#f1f5f9') : '#cbd5e1'}"
+              title={node.name}
+            >
+              {node.name}
+            </span>
+          </div>
 
-          <!-- Active / Status Badge -->
+          <!-- Active / Ring Badge -->
           {#if node.isActive}
             <div class="flex items-center gap-1 shrink-0">
               <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/35">
@@ -625,8 +735,11 @@
             <span class="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
               Recent
             </span>
+          {:else if node.ring === 'inner'}
+            <!-- Frequently Used Indicator Dot -->
+            <span class="size-1.5 rounded-full bg-sky-400/80 shrink-0" title="Inner Orbit (Frequently Used)"></span>
           {:else}
-            <span class="size-1.5 rounded-full bg-slate-600 shrink-0"></span>
+            <span class="size-1.5 rounded-full bg-slate-600/50 shrink-0"></span>
           {/if}
         </div>
       {/each}
@@ -639,47 +752,49 @@
       </div>
     {/if}
 
-    <!-- Bottom Legend & Helper Info -->
+    <!-- Bottom Legend & Info -->
     <div class="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-      <div class="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#0a0e18]/90 border border-[#161d2d] backdrop-blur text-[10px] text-slate-400 shadow-lg pointer-events-auto font-mono">
+      <div class="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#0a0e18]/90 border border-[#161d2d] text-[10px] text-slate-400 shadow-lg pointer-events-auto font-mono">
         <span class="flex items-center gap-1.5">
-          <span class="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Live Stream</span>
+          <span class="size-2 rounded-full bg-sky-400"></span>
+          <span>Inner Orbit (Frequent)</span>
         </span>
         <span class="flex items-center gap-1.5">
-          <span class="size-2 rounded-full bg-amber-400"></span>
-          <span>Recent</span>
+          <span class="size-2 rounded-full bg-slate-500"></span>
+          <span>Outer Orbit (Branched)</span>
         </span>
-        <span class="flex items-center gap-1.5">
-          <span class="size-2 rounded-full bg-slate-600"></span>
-          <span>Connected</span>
-        </span>
+        {#if activeCount > 0}
+          <span class="flex items-center gap-1.5">
+            <span class="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Live Stream</span>
+          </span>
+        {/if}
       </div>
-      <span class="hidden sm:inline-block text-[10px] text-slate-500 bg-[#0a0e18]/80 px-2.5 py-1 rounded-md backdrop-blur border border-[#161d2d]/60 font-mono">
-        Drag to pan · Scroll to zoom · Hover node to highlight
+      <span class="hidden sm:inline-block text-[10px] text-slate-500 bg-[#0a0e18]/80 px-2.5 py-1 rounded-md border border-[#161d2d]/60 font-mono">
+        Drag to pan · Scroll to zoom
       </span>
     </div>
   </div>
 </div>
 
 <style>
-  /* Cardiac Lub-Dub Systolic Heartbeat Pulse for Gateway Core */
+  /* Lub-Dub Cardiac Pulse: Very gentle and slow on idle, energetic on active */
   @keyframes gateway-cardiac-pulse {
     0% {
       transform: translate(-50%, -50%) scale(1);
       box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
     }
     14% {
-      transform: translate(-50%, -50%) scale(1.05);
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.55), 0 0 45px rgba(56, 189, 248, 0.25);
+      transform: translate(-50%, -50%) scale(1.035);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
     }
     24% {
       transform: translate(-50%, -50%) scale(1.01);
-      box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
     }
     38% {
-      transform: translate(-50%, -50%) scale(1.07);
-      box-shadow: 0 0 30px rgba(56, 189, 248, 0.65), 0 0 60px rgba(56, 189, 248, 0.35);
+      transform: translate(-50%, -50%) scale(1.05);
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.55);
     }
     56%, 100% {
       transform: translate(-50%, -50%) scale(1);
@@ -688,6 +803,6 @@
   }
 
   .gateway-cardiac-pulse {
-    animation: gateway-cardiac-pulse var(--hb-dur, 2.1s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: gateway-cardiac-pulse var(--hb-dur, 5.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 </style>
