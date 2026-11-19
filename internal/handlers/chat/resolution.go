@@ -531,7 +531,12 @@ func isKovAPIImageModel(model string) bool {
 		strings.HasPrefix(lower, "banana-") ||
 		strings.HasPrefix(lower, "grok-imagine-") ||
 		strings.HasPrefix(lower, "flare") ||
-		strings.HasPrefix(lower, "sunburst")
+		strings.HasPrefix(lower, "sunburst") ||
+		strings.HasPrefix(lower, "flux") ||
+		strings.HasPrefix(lower, "midjourney") ||
+		strings.HasPrefix(lower, "sdxl") ||
+		strings.HasPrefix(lower, "recraft") ||
+		strings.HasPrefix(lower, "ideogram")
 }
 
 // resolvePrefixProvider checks if a provider name is a providerNode prefix.

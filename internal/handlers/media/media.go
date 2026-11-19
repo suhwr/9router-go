@@ -347,12 +347,41 @@ func (h *MediaHandler) HandleRerank(w http.ResponseWriter, r *http.Request) {
 // that already names a chat or embeddings lane is rewritten to the rerank
 // sibling, so a connection saved with either spelling still resolves.
 func buildRerankURL(baseURL string) string {
-	for _, lane := range []string{"/chat/completions", "/embeddings"} {
+	for _, lane := range []string{"/chat/completions", "/responses", "/completions", "/messages", "/chat", "/embeddings"} {
 		if strings.Contains(baseURL, lane) {
 			return strings.Replace(baseURL, lane, "/rerank", 1)
 		}
 	}
 	return strings.TrimRight(baseURL, "/") + "/rerank"
+}
+
+// cleanMediaBaseURL trims known API lane routes and /v1 prefixes so that
+// the returned base URL can be safely joined with /v1/... endpoints without
+// creating broken paths like /v1/responses/v1/images/generations.
+func cleanMediaBaseURL(raw string) string {
+	base := strings.TrimRight(strings.TrimSpace(raw), "/")
+	for {
+		prev := base
+		for _, s := range []string{
+			"/chat/completions",
+			"/chat",
+			"/responses",
+			"/completions",
+			"/messages",
+			"/embeddings",
+			"/systemone",
+			"/rerank",
+		} {
+			base = strings.TrimSuffix(base, s)
+		}
+		base = strings.TrimSuffix(base, "/v1")
+		base = strings.TrimSuffix(base, "/v1beta")
+		base = strings.TrimRight(base, "/")
+		if base == prev {
+			break
+		}
+	}
+	return base
 }
 
 // HandleImages handles /v1/images/generations.
@@ -853,7 +882,7 @@ func (h *MediaHandler) HandleImageJobGet(w http.ResponseWriter, r *http.Request)
 	if connData != nil && connData.BaseURL != "" {
 		baseURL = strings.TrimRight(connData.BaseURL, "/")
 	}
-	targetURL := strings.TrimSuffix(baseURL, "/v1") + "/v1/images/jobs/" + id
+	targetURL := cleanMediaBaseURL(baseURL) + "/v1/images/jobs/" + id
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
 	if err != nil {
@@ -1211,10 +1240,7 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 			// vendor never serves (tavily got api.tavily.com/search/v1/search,
 			// serper got google.serper.dev/v1/search). Each vendor publishes its
 			// own search/fetch URL and verb in the registry.
-			cleanBase := strings.TrimRight(providerCfg.BaseURL, "/")
-			cleanBase = strings.TrimSuffix(cleanBase, "/v1")
-			cleanBase = strings.TrimSuffix(cleanBase, "/chat/completions")
-			cleanBase = strings.TrimSuffix(cleanBase, "/messages")
+			cleanBase := cleanMediaBaseURL(providerCfg.BaseURL)
 
 			normEndpoint := endpoint
 			if !strings.HasPrefix(normEndpoint, "/v1/") && strings.HasPrefix(normEndpoint, "/") {
@@ -1565,8 +1591,7 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 	if connData != nil && connData.BaseURL != "" {
 		baseURL = strings.TrimRight(connData.BaseURL, "/")
 	}
-	baseURL = strings.TrimSuffix(baseURL, "/chat/completions")
-	baseURL = strings.TrimSuffix(baseURL, "/messages")
+	cleanBase := cleanMediaBaseURL(baseURL)
 
 	hasCustomBaseURL := connData != nil && connData.BaseURL != "" && connData.BaseURL != providerCfg.BaseURL
 
@@ -1576,25 +1601,25 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 		if !hasCustomBaseURL && providerCfg.ImageURL != "" {
 			targetURL = providerCfg.ImageURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/images/generations"
+			targetURL = cleanBase + "/v1/images/generations"
 		}
 	case "/v1/images/edits", "/images/edits":
 		if !hasCustomBaseURL && providerCfg.ImageURL != "" {
 			targetURL = providerCfg.ImageURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/images/edits"
+			targetURL = cleanBase + "/v1/images/edits"
 		}
 	case "/v1/audio/speech", "/audio/speech":
 		if !hasCustomBaseURL && providerCfg.TTSURL != "" {
 			targetURL = providerCfg.TTSURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/audio/speech"
+			targetURL = cleanBase + "/v1/audio/speech"
 		}
 	case "/v1/audio/transcriptions", "/audio/transcriptions":
 		if !hasCustomBaseURL && providerCfg.STTURL != "" {
 			targetURL = providerCfg.STTURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/audio/transcriptions"
+			targetURL = cleanBase + "/v1/audio/transcriptions"
 		}
 	case "/v1/videos/generations", "/videos/generations":
 		if !hasCustomBaseURL && providerCfg.VideoURL != "" {
@@ -1604,20 +1629,20 @@ func (h *MediaHandler) forwardMediaRequest(w http.ResponseWriter, r *http.Reques
 				targetURL = strings.TrimRight(providerCfg.VideoURL, "/") + "/generations"
 			}
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/videos/generations"
+			targetURL = cleanBase + "/v1/videos/generations"
 		}
 	case "/v1/systemone", "/systemone":
 		if !hasCustomBaseURL && providerCfg.SystemoneURL != "" {
 			targetURL = providerCfg.SystemoneURL
 		} else {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + "/v1/systemone"
+			targetURL = cleanBase + "/v1/systemone"
 		}
 	default:
-		if strings.HasSuffix(baseURL, "/v1") && strings.HasPrefix(endpoint, "/v1/") {
-			targetURL = strings.TrimSuffix(baseURL, "/v1") + endpoint
-		} else {
-			targetURL = baseURL + endpoint
+		normEp := endpoint
+		if !strings.HasPrefix(normEp, "/v1/") && strings.HasPrefix(normEp, "/") {
+			normEp = "/v1" + normEp
 		}
+		targetURL = cleanBase + normEp
 	}
 	method := r.Method
 	if endpoint == "/v1/search" && providerCfg.SearchURL != "" && !hasCustomBaseURL {
@@ -1974,8 +1999,10 @@ func BuildEmbeddingsURL(baseURL string) string {
 }
 
 func buildEmbeddingsURL(baseURL string) string {
-	if strings.Contains(baseURL, "/chat/completions") {
-		return strings.Replace(baseURL, "/chat/completions", "/embeddings", 1)
+	for _, lane := range []string{"/chat/completions", "/responses", "/completions", "/messages", "/chat"} {
+		if strings.Contains(baseURL, lane) {
+			return strings.Replace(baseURL, lane, "/embeddings", 1)
+		}
 	}
 	return strings.TrimRight(baseURL, "/") + "/embeddings"
 }
