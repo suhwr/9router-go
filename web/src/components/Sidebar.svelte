@@ -7,6 +7,7 @@
   import {
     isFavoritesEnabled,
     isIconRailEnabled,
+    setIconRailEnabled,
     loadSidebarPrefs,
   } from '../lib/sidebarPrefs.svelte'
   import { pinnedNavEntries } from '../lib/navFavorites.svelte'
@@ -213,85 +214,138 @@
   const visiblePins = $derived(
     pinnedRows.filter((entry) => !(hiddenNav ?? []).includes(entry.id))
   )
+
+  function toggleIconRail() {
+    setIconRailEnabled(!iconRail)
+  }
 </script>
 
 <aside
   class="flex h-full max-h-screen {iconRail
-    ? 'w-[56px]'
+    ? 'w-72 lg:w-[60px]'
     : 'w-72'} flex-col overflow-hidden border-r border-border-subtle bg-sidebar backdrop-blur-xl transition-all duration-300 flex-shrink-0 select-none z-30"
 >
-  <!-- Window control / traffic lights. Decoration lifted from the macOS
-       desktop frame; on a phone the drawer has no window around it, so the
-       three dots read as broken UI. Mobile hides them. -->
+  <!-- Window control / traffic lights. Desktop only. -->
   {#if !iconRail}
-    <div class="hidden lg:flex items-center gap-2 px-6 pt-5 pb-2 shrink-0">
-      <div class="w-3 h-3 rounded-full bg-[#FF5F56]"></div>
-      <div class="w-3 h-3 rounded-full bg-[#FFBD2E]"></div>
-      <div class="w-3 h-3 rounded-full bg-[#27C93F]"></div>
+    <div class="hidden lg:flex items-center justify-between px-5 pt-4 pb-1 shrink-0">
+      <div class="flex items-center gap-1.5">
+        <div class="w-3 h-3 rounded-full bg-[#FF5F56]"></div>
+        <div class="w-3 h-3 rounded-full bg-[#FFBD2E]"></div>
+        <div class="w-3 h-3 rounded-full bg-[#27C93F]"></div>
+      </div>
+      <button
+        type="button"
+        onclick={toggleIconRail}
+        title="Collapse sidebar to icon rail"
+        class="flex items-center justify-center size-6 rounded-md text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer"
+        aria-label="Collapse sidebar"
+      >
+        <span class="material-symbols-outlined text-[16px]">dock_to_left</span>
+      </button>
     </div>
   {/if}
 
-  <!-- Brand header: 9router-go with official favicon.svg logo -->
-  <div class="{iconRail ? 'px-2 py-4' : 'px-6 py-4'} flex flex-col gap-2 shrink-0">
-    <a
-      href={TAB_ROUTES.endpoint}
-      onclick={(e) => handleNav('endpoint', e)}
-      class="flex items-center {iconRail ? 'justify-center' : 'gap-3'} cursor-pointer group"
-      title={iconRail ? displayBrandName : undefined}
-    >
-      <div
-        class="flex items-center justify-center size-9 rounded-[10px] bg-surface-2 border border-border-subtle shadow-[var(--shadow-warm)] flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden p-1.5"
-      >
-        <img
-          src={displayBrandLogo}
-          alt={displayBrandName}
-          class="w-full h-full object-contain"
-        />
+  <!-- Brand header: logo, name, subtitle & toggle buttons -->
+  <div class="{iconRail ? 'px-2 py-3.5' : 'px-5 py-3'} flex flex-col gap-2 shrink-0">
+    {#if !iconRail}
+      <div class="flex items-center justify-between gap-2">
+        <a
+          href={TAB_ROUTES.endpoint}
+          onclick={(e) => handleNav('endpoint', e)}
+          class="flex items-center gap-3 cursor-pointer group min-w-0"
+        >
+          <div
+            class="flex items-center justify-center size-9 rounded-[10px] bg-surface-2 border border-border-subtle shadow-[var(--shadow-warm)] flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden p-1.5"
+          >
+            <img
+              src={displayBrandLogo}
+              alt={displayBrandName}
+              class="w-full h-full object-contain"
+            />
+          </div>
+          <div class="flex flex-col min-w-0">
+            <h1 class="text-base font-semibold tracking-tight text-text-main truncate leading-snug">
+              {displayBrandName}
+            </h1>
+            <span class="text-xs text-text-muted leading-tight truncate">
+              {#if brandSubtitle}
+                {brandSubtitle}
+              {:else if !hideBrandFooter && version}
+                {`v${version}`}
+              {/if}
+            </span>
+          </div>
+        </a>
+
+        <!-- Collapse button on desktop -->
+        <button
+          type="button"
+          onclick={toggleIconRail}
+          title="Collapse sidebar to icon rail"
+          class="hidden lg:flex items-center justify-center size-7 rounded-md text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
+          aria-label="Collapse sidebar"
+        >
+          <span class="material-symbols-outlined text-[16px]">dock_to_left</span>
+        </button>
       </div>
-      {#if !iconRail}
-        <div class="flex flex-col min-w-0">
-          <h1 class="text-lg font-semibold tracking-tight text-text-main truncate leading-snug">
-            {displayBrandName}
-          </h1>
-          <span class="text-xs text-text-muted leading-tight truncate">
-            {#if brandSubtitle}
-              {brandSubtitle}
-            {:else if !hideBrandFooter && version}
-              {`v${version}`}
-            {/if}
+
+      <!-- Update notification banner below version (matches upstream 9router) -->
+      {#if !hideBrandFooter && updateInfo && updateInfo.hasUpdate}
+        <div
+          class="flex flex-col gap-1.5 rounded-lg p-2 bg-green-500/10 dark:bg-amber-500/10 border border-green-500/30 dark:border-amber-500/30 text-green-700 dark:text-amber-400 mt-0.5 animate-in fade-in duration-200"
+        >
+          <span class="text-[11px] font-semibold text-green-700 dark:text-amber-400 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+            <span class="truncate">New version available: v{updateInfo.latestVersion}</span>
           </span>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              onclick={() => (showUpdateModal = true)}
+              class="px-2 py-0.5 rounded bg-green-600 hover:bg-green-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+            >
+              Update now
+            </button>
+            <button
+              type="button"
+              onclick={copyInstallCmd}
+              title="Copy install command"
+              class="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
+            >
+              <code class="block text-[10px] text-green-700 dark:text-amber-300 font-mono truncate bg-surface/70 px-1 py-0.5 rounded">
+                {copied ? 'Copied!' : INSTALL_CMD}
+              </code>
+            </button>
+          </div>
         </div>
       {/if}
-    </a>
-
-    <!-- Update notification banner below version (matches upstream 9router) -->
-    {#if !hideBrandFooter && updateInfo && updateInfo.hasUpdate}
-      <div
-        class="flex flex-col gap-1.5 rounded-lg p-2 bg-green-500/10 dark:bg-amber-500/10 border border-green-500/30 dark:border-amber-500/30 text-green-700 dark:text-amber-400 mt-0.5 animate-in fade-in duration-200"
-      >
-        <span class="text-[11px] font-semibold text-green-700 dark:text-amber-400 flex items-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
-          <span class="truncate">New version available: v{updateInfo.latestVersion}</span>
-        </span>
-        <div class="flex items-center gap-1.5">
-          <button
-            type="button"
-            onclick={() => (showUpdateModal = true)}
-            class="px-2 py-0.5 rounded bg-green-600 hover:bg-green-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+    {:else}
+      <div class="flex flex-col items-center gap-2.5">
+        <a
+          href={TAB_ROUTES.endpoint}
+          onclick={(e) => handleNav('endpoint', e)}
+          class="flex items-center justify-center cursor-pointer group"
+          title={displayBrandName}
+        >
+          <div
+            class="flex items-center justify-center size-9 rounded-[10px] bg-surface-2 border border-border-subtle shadow-[var(--shadow-warm)] flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden p-1.5"
           >
-            Update now
-          </button>
-          <button
-            type="button"
-            onclick={copyInstallCmd}
-            title="Copy install command"
-            class="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
-          >
-            <code class="block text-[10px] text-green-700 dark:text-amber-300 font-mono truncate bg-surface/70 px-1 py-0.5 rounded">
-              {copied ? 'Copied!' : INSTALL_CMD}
-            </code>
-          </button>
-        </div>
+            <img
+              src={displayBrandLogo}
+              alt={displayBrandName}
+              class="w-full h-full object-contain"
+            />
+          </div>
+        </a>
+        <button
+          type="button"
+          onclick={toggleIconRail}
+          title="Expand sidebar (Click to show full menu)"
+          class="hidden lg:flex items-center justify-center size-8 rounded-lg bg-surface-2 hover:bg-primary/10 text-text-muted hover:text-primary border border-border-subtle transition-all cursor-pointer shadow-sm"
+          aria-label="Expand sidebar"
+        >
+          <span class="material-symbols-outlined text-[18px]">dock_to_right</span>
+        </button>
       </div>
     {/if}
   </div>
@@ -477,22 +531,41 @@
 
   <!-- Bottom connection summary -->
   {#if !iconRail}
-    <div class="p-4 border-t border-border-subtle shrink-0">
+    <div class="p-3 border-t border-border-subtle shrink-0">
       <div
         class="p-2.5 rounded-[10px] bg-surface border border-border-subtle flex items-center justify-between"
       >
         <div class="min-w-0">
-          <p class="text-[11px] text-text-muted uppercase tracking-wide">Providers</p>
+          <p class="text-[10px] text-text-muted uppercase tracking-wider font-semibold">Gateway</p>
           <p class="text-xs font-semibold text-text-main mt-0.5 truncate">
             {activeConnections} <span class="text-text-muted font-normal">/ {totalConnections} active</span>
           </p>
         </div>
-        <span class="material-symbols-outlined text-primary text-[18px]">radio_button_checked</span>
+        <button
+          type="button"
+          onclick={toggleIconRail}
+          title="Collapse sidebar to icon rail"
+          class="hidden lg:flex items-center justify-center size-7 rounded-md text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
+          aria-label="Collapse sidebar"
+        >
+          <span class="material-symbols-outlined text-[16px]">dock_to_left</span>
+        </button>
       </div>
     </div>
   {:else}
-    <div class="p-2 border-t border-border-subtle shrink-0 flex justify-center" title="{activeConnections} / {totalConnections} active">
-      <span class="material-symbols-outlined text-primary text-[18px]">radio_button_checked</span>
+    <div class="p-2 border-t border-border-subtle shrink-0 flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onclick={toggleIconRail}
+        title="Expand sidebar"
+        class="hidden lg:flex items-center justify-center size-8 rounded-lg text-text-muted hover:text-primary hover:bg-surface-2 transition-colors cursor-pointer"
+        aria-label="Expand sidebar"
+      >
+        <span class="material-symbols-outlined text-[18px]">dock_to_right</span>
+      </button>
+      <div title="{activeConnections} / {totalConnections} active">
+        <span class="material-symbols-outlined text-primary text-[18px]">radio_button_checked</span>
+      </div>
     </div>
   {/if}
 </aside>

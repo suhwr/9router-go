@@ -171,6 +171,8 @@ func (h *DashboardHandler) HandleAuthStatus(w http.ResponseWriter, r *http.Reque
 		"loginHideDefaultPasswordHint": boolOr(raw, "loginHideDefaultPasswordHint", false),
 		"hideBrandFooter":              boolOr(raw, "hideBrandFooter", false),
 		"footerText":                   stringOr(raw, "footerText", ""),
+		"accentColor":                  stringOr(raw, "accentColor", ""),
+		"loginCardStyle":               stringOr(raw, "loginCardStyle", "glass"),
 	})
 }
 

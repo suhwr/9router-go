@@ -319,6 +319,8 @@ export interface Settings {
   loginHideDefaultPasswordHint?: boolean
   hideBrandFooter?: boolean
   footerText?: string
+  accentColor?: string
+  loginCardStyle?: string
   requireApiKey?: boolean
   tunnelDashboardAccess?: boolean
   tunnelWatchdogEnabled?: boolean

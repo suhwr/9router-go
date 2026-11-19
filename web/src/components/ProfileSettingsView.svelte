@@ -120,6 +120,31 @@
   let loginHideDefaultPasswordHint = $state(false)
   let hideBrandFooter = $state(false)
   let footerText = $state('')
+  let accentColor = $state('')
+  let loginCardStyle = $state('glass')
+
+  type SettingsTab = 'rebranding' | 'general' | 'routing' | 'security' | 'database'
+  let activeSettingsTab = $state<SettingsTab>('rebranding')
+
+  const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; description: string }[] = [
+    { id: 'rebranding', label: 'Brand & Appearance', icon: 'palette', description: 'Rebranding, Accent Color, Login Screen & Stealth' },
+    { id: 'general', label: 'Display & Navigation', icon: 'tune', description: 'Display preferences, Animation, Currency & Sidebar layout' },
+    { id: 'routing', label: 'Routing & Prompts', icon: 'alt_route', description: 'Fallback strategies, Combo routing & Global prompts' },
+    { id: 'security', label: 'Security & Access', icon: 'shield', description: 'Master password, Session timeout, OIDC & SAML' },
+    { id: 'database', label: 'Storage & Database', icon: 'database', description: 'Usage logs retention, Database vacuum & Pruning' },
+  ]
+
+  const ACCENT_PRESETS = [
+    { id: 'terracotta', name: 'Terracotta', hex: '#e56a4a' },
+    { id: 'emerald', name: 'Emerald', hex: '#10b981' },
+    { id: 'blue', name: 'Ocean Blue', hex: '#3b82f6' },
+    { id: 'indigo', name: 'Indigo', hex: '#6366f1' },
+    { id: 'violet', name: 'Violet', hex: '#8b5cf6' },
+    { id: 'crimson', name: 'Crimson', hex: '#f43f5e' },
+    { id: 'amber', name: 'Amber Gold', hex: '#f59e0b' },
+    { id: 'cyan', name: 'Cyber Cyan', hex: '#06b6d4' },
+    { id: 'slate', name: 'Slate Gray', hex: '#64748b' },
+  ]
 
   let isUploadingLogo = $state(false)
   let logoUploadError = $state('')
@@ -389,6 +414,8 @@
         if (typeof s.loginHideDefaultPasswordHint === 'boolean') loginHideDefaultPasswordHint = s.loginHideDefaultPasswordHint
         if (typeof s.hideBrandFooter === 'boolean') hideBrandFooter = s.hideBrandFooter
         if (typeof s.footerText === 'string') footerText = s.footerText
+        if (typeof s.accentColor === 'string') accentColor = s.accentColor
+        if (typeof s.loginCardStyle === 'string') loginCardStyle = s.loginCardStyle
         branding.setBranding(s)
 
         if (s.authMode === 'oidc' || s.authMode === 'saml') authMode = s.authMode
@@ -601,6 +628,8 @@
         loginHideDefaultPasswordHint,
         hideBrandFooter,
         footerText: footerText.trim(),
+        accentColor: accentColor.trim(),
+        loginCardStyle: loginCardStyle.trim(),
         authMode,
         oidcIssuerUrl,
         oidcClientId,
@@ -618,10 +647,12 @@
         appSubtitle: appSubtitle.trim(),
         appLogoUrl: appLogoUrl.trim(),
         faviconUrl: faviconUrl.trim(),
+        accentColor: accentColor.trim(),
         loginTitle: loginTitle.trim(),
         loginSubtitle: loginSubtitle.trim(),
         loginBgUrl: loginBgUrl.trim(),
         loginBgBlur,
+        loginCardStyle: loginCardStyle.trim(),
         loginHideDefaultPasswordHint,
         hideBrandFooter,
         footerText: footerText.trim(),
@@ -886,13 +917,30 @@
     </button>
   </div>
 
+  <!-- SETTINGS TABS NAVIGATION -->
+  <div class="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border-subtle overflow-x-auto custom-scrollbar shrink-0">
+    {#each SETTINGS_TABS as tab (tab.id)}
+      <button
+        type="button"
+        onclick={() => (activeSettingsTab = tab.id)}
+        class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer {activeSettingsTab === tab.id
+          ? 'bg-primary text-white shadow-sm'
+          : 'text-text-muted hover:text-text-main hover:bg-surface-2'}"
+      >
+        <span class="material-symbols-outlined text-[17px]">{tab.icon}</span>
+        <span>{tab.label}</span>
+      </button>
+    {/each}
+  </div>
+
   <div
-    class="grid grid-cols-1 lg:grid-cols-2 gap-5"
+    class="grid grid-cols-1 {activeSettingsTab === 'rebranding' ? 'max-w-4xl' : 'lg:grid-cols-2'} gap-5"
     oninput={handleSettingsInput}
     onchange={handleSettingsInput}
     onclick={handleSettingsInput}
   >
 
+    {#if activeSettingsTab === 'database'}
     <!-- SECTION 1: Runtime Storage -->
     <Card padding="md" class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-border">
@@ -956,7 +1004,9 @@
         </div>
       </div>
     </Card>
+    {/if}
 
+    {#if activeSettingsTab === 'security'}
     <!-- SECTION 2: Security & Master Password -->
     <Card padding="md" class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-border">
@@ -1159,7 +1209,9 @@
         {/if}
       </div>
     </Card>
+    {/if}
 
+    {#if activeSettingsTab === 'routing'}
     <!-- SECTION 4: Routing Strategy & Limits -->
     <Card padding="md" class="space-y-4">
       <div class="flex items-center gap-2 pb-2 border-b border-border">
@@ -1223,7 +1275,9 @@
 
       </div>
     </Card>
+    {/if}
 
+    {#if activeSettingsTab === 'database'}
     <!-- SECTION 5: Observability & Storage Retention -->
     <Card padding="md" class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-border">
@@ -1383,7 +1437,9 @@
         </div>
       </div>
     </Card>
+    {/if}
 
+    {#if activeSettingsTab === 'routing'}
     <!-- SECTION 6: Global System Prompt & Anti-Poisoning -->
     <Card padding="md" class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-border">
@@ -1442,6 +1498,9 @@
         </div>
       </div>
     </Card>
+    {/if}
+
+    {#if activeSettingsTab === 'rebranding'}
     <!-- SECTION: Rebranding & White-Labeling. Configure full brand identity,
          favicon, stealth settings, and login screen customization. -->
     <Card padding="md" class="space-y-6">
@@ -1577,7 +1636,96 @@
         </div>
       </div>
 
-      <!-- 2. Login Page Customization (/login) -->
+      <!-- 2. Theme & Accent Colors -->
+      <div class="space-y-4 pt-2 border-t border-border-subtle">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-text-subtle flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-brand-500">format_paint</span>
+          Theme & Accent Colors
+        </h3>
+        <p class="text-xs text-text-muted">
+          Choose a primary accent color for buttons, badges, active tabs, and highlights across the entire dashboard and login screen.
+        </p>
+
+        <!-- Presets -->
+        <div class="space-y-2">
+          <span class="text-xs font-medium text-text-main">Preset Swatches</span>
+          <div class="flex flex-wrap gap-2">
+            {#each ACCENT_PRESETS as preset (preset.id)}
+              {@const isSelected = (accentColor.toLowerCase() === preset.hex.toLowerCase()) || (!accentColor && preset.id === 'terracotta')}
+              <button
+                type="button"
+                onclick={() => {
+                  accentColor = preset.hex
+                  branding.setBranding({ accentColor: preset.hex })
+                }}
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer {isSelected
+                  ? 'border-text-main bg-surface shadow-sm ring-2 ring-primary/30'
+                  : 'border-border-subtle bg-surface-2 hover:border-border'}"
+              >
+                <span class="size-3.5 rounded-full shadow-inner shrink-0" style:background-color={preset.hex}></span>
+                <span class="text-text-main">{preset.name}</span>
+                {#if isSelected}
+                  <span class="material-symbols-outlined text-xs text-primary">check</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Custom Color Picker -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-2/60 border border-border-subtle">
+            <input
+              type="color"
+              value={accentColor || '#e56a4a'}
+              oninput={(e) => {
+                const hex = (e.target as HTMLInputElement).value
+                accentColor = hex
+                branding.setBranding({ accentColor: hex })
+              }}
+              class="size-9 rounded-lg border-0 cursor-pointer bg-transparent"
+              title="Pick custom color"
+            />
+            <div class="flex-1 min-w-0">
+              <span class="text-xs font-medium text-text-main block">Custom Hex Code</span>
+              <Input
+                bind:value={accentColor}
+                placeholder="#e56a4a"
+                oninput={() => branding.setBranding({ accentColor })}
+              />
+            </div>
+            {#if accentColor}
+              <button
+                type="button"
+                onclick={() => {
+                  accentColor = ''
+                  branding.setBranding({ accentColor: '' })
+                }}
+                class="text-[11px] text-text-muted hover:text-text-main underline cursor-pointer shrink-0"
+              >
+                Reset
+              </button>
+            {/if}
+          </div>
+
+          <!-- Live Accent Preview Box -->
+          <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-2/60 border border-border-subtle">
+            <div class="size-9 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm shrink-0">
+              <span class="material-symbols-outlined text-[20px]">palette</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <span class="text-xs font-semibold text-text-main block">Live Accent Preview</span>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-primary text-white">Active Button</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">Badge</span>
+                <span class="text-xs font-medium text-primary hover:underline cursor-pointer">Link</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Login Page Customization (/login) -->
       <div class="space-y-4 pt-2 border-t border-border-subtle">
         <h3 class="text-xs font-bold uppercase tracking-wider text-text-subtle flex items-center gap-1.5">
           <span class="material-symbols-outlined text-sm text-brand-500">lock</span>
@@ -1649,6 +1797,48 @@
           {/if}
         </div>
 
+        <!-- Card Style options -->
+        <div class="space-y-1.5 pt-1">
+          <span class="text-xs font-medium text-text-main">Login Card Style</span>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onclick={() => (loginCardStyle = 'glass')}
+              class="p-2.5 rounded-xl border text-left transition-all cursor-pointer {loginCardStyle === 'glass' ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-border-subtle bg-surface-2 hover:border-border'}"
+            >
+              <div class="text-xs font-semibold text-text-main flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm text-primary">blur_on</span>
+                Frosted Glass
+              </div>
+              <p class="text-[10px] text-text-muted mt-0.5">Translucent with backdrop blur</p>
+            </button>
+
+            <button
+              type="button"
+              onclick={() => (loginCardStyle = 'solid')}
+              class="p-2.5 rounded-xl border text-left transition-all cursor-pointer {loginCardStyle === 'solid' ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-border-subtle bg-surface-2 hover:border-border'}"
+            >
+              <div class="text-xs font-semibold text-text-main flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm text-primary">square</span>
+                Solid Modern
+              </div>
+              <p class="text-[10px] text-text-muted mt-0.5">Opaque card with crisp border</p>
+            </button>
+
+            <button
+              type="button"
+              onclick={() => (loginCardStyle = 'bordered')}
+              class="p-2.5 rounded-xl border text-left transition-all cursor-pointer {loginCardStyle === 'bordered' ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-border-subtle bg-surface-2 hover:border-border'}"
+            >
+              <div class="text-xs font-semibold text-text-main flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm text-primary">border_outer</span>
+                Bordered Glow
+              </div>
+              <p class="text-[10px] text-text-muted mt-0.5">Accent-tinted highlighted border</p>
+            </button>
+          </div>
+        </div>
+
         <!-- Login Card Options -->
         <div class="space-y-3 pt-1">
           <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-surface-2/40 border border-border-subtle">
@@ -1710,6 +1900,9 @@
         </div>
       </div>
     </Card>
+    {/if}
+
+    {#if activeSettingsTab === 'general'}
     <!-- SECTION: Display. Unit abbreviation, the usage-detail default, an
          advanced-settings disclosure that unfolds the currency rates, the
          per-panel Usage list and the sidebar features, and the display currency
@@ -2187,6 +2380,7 @@
         {/each}
       </div>
     </Card>
+    {/if}
     {/if}
 
     <!-- Save reminder: an operator who flipped a switch must not walk away

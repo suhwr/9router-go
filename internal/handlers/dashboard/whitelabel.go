@@ -21,6 +21,8 @@ const (
 	loginHideDefaultPasswordKey    = "loginHideDefaultPasswordHint"
 	hideBrandFooterSettingKey      = "hideBrandFooter"
 	footerTextSettingKey           = "footerText"
+	accentColorSettingKey          = "accentColor"
+	loginCardStyleSettingKey       = "loginCardStyle"
 )
 
 // maxAppNameRunes caps the stored product name. The sidebar renders it inside a
@@ -91,6 +93,30 @@ func normalizeGenericText(value any, maxRunes int) (string, bool) {
 	s = strings.TrimSpace(s)
 	if len([]rune(s)) > maxRunes {
 		s = string([]rune(s)[:maxRunes])
+	}
+	return s, true
+}
+
+func normalizeHexColor(value any) (string, bool) {
+	s, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", true
+	}
+	if !strings.HasPrefix(s, "#") {
+		s = "#" + s
+	}
+	if len(s) != 4 && len(s) != 7 && len(s) != 9 {
+		return "", false
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return "", false
+		}
 	}
 	return s, true
 }
@@ -189,6 +215,22 @@ func applyWhitelabelUpdate(updates map[string]any) {
 			updates[footerTextSettingKey] = txt
 		}
 	}
+	if value, ok := updates[accentColorSettingKey]; ok {
+		color, valid := normalizeHexColor(value)
+		if !valid {
+			updates[accentColorSettingKey] = nil
+		} else {
+			updates[accentColorSettingKey] = color
+		}
+	}
+	if value, ok := updates[loginCardStyleSettingKey]; ok {
+		style, valid := normalizeGenericText(value, 20)
+		if !valid {
+			updates[loginCardStyleSettingKey] = nil
+		} else {
+			updates[loginCardStyleSettingKey] = style
+		}
+	}
 }
 
 // sanitizeWhitelabel re-reads the stored values through the same normalizers.
@@ -276,6 +318,22 @@ func sanitizeWhitelabel(settings map[string]any) {
 			delete(settings, footerTextSettingKey)
 		} else {
 			settings[footerTextSettingKey] = txt
+		}
+	}
+	if value, ok := settings[accentColorSettingKey]; ok {
+		color, valid := normalizeHexColor(value)
+		if !valid || color == "" {
+			delete(settings, accentColorSettingKey)
+		} else {
+			settings[accentColorSettingKey] = color
+		}
+	}
+	if value, ok := settings[loginCardStyleSettingKey]; ok {
+		style, valid := normalizeGenericText(value, 20)
+		if !valid || style == "" {
+			delete(settings, loginCardStyleSettingKey)
+		} else {
+			settings[loginCardStyleSettingKey] = style
 		}
 	}
 }

@@ -29,10 +29,12 @@
   let appName = $state('')
   let appLogoUrl = $state('')
   let faviconUrl = $state('')
+  let accentColor = $state('')
   let loginTitle = $state('')
   let loginSubtitle = $state('')
   let loginBgUrl = $state('')
   let loginBgBlur = $state(false)
+  let loginCardStyle = $state('glass')
   let loginHideDefaultPasswordHint = $state(false)
   let hideBrandFooter = $state(false)
   let footerText = $state('')
@@ -82,10 +84,12 @@
         if (typeof data.appName === 'string') appName = data.appName
         if (typeof data.appLogoUrl === 'string') appLogoUrl = data.appLogoUrl
         if (typeof data.faviconUrl === 'string') faviconUrl = data.faviconUrl
+        if (typeof data.accentColor === 'string') accentColor = data.accentColor
         if (typeof data.loginTitle === 'string') loginTitle = data.loginTitle
         if (typeof data.loginSubtitle === 'string') loginSubtitle = data.loginSubtitle
         if (typeof data.loginBgUrl === 'string') loginBgUrl = data.loginBgUrl
         if (typeof data.loginBgBlur === 'boolean') loginBgBlur = data.loginBgBlur
+        if (typeof data.loginCardStyle === 'string') loginCardStyle = data.loginCardStyle
         if (typeof data.loginHideDefaultPasswordHint === 'boolean') loginHideDefaultPasswordHint = data.loginHideDefaultPasswordHint
         if (typeof data.hideBrandFooter === 'boolean') hideBrandFooter = data.hideBrandFooter
         if (typeof data.footerText === 'string') footerText = data.footerText
@@ -94,10 +98,12 @@
           appName,
           appLogoUrl,
           faviconUrl,
+          accentColor,
           loginTitle,
           loginSubtitle,
           loginBgUrl,
           loginBgBlur,
+          loginCardStyle,
           loginHideDefaultPasswordHint,
           hideBrandFooter,
           footerText,
@@ -259,7 +265,7 @@
         </p>
       </div>
 
-      <div class="{loginBgBlur ? 'bg-surface/85 backdrop-blur-xl border border-white/15 shadow-2xl' : 'bg-surface border border-border-subtle shadow-[var(--shadow-soft)]'} rounded-[14px] p-6 transition-all">
+      <div class="{loginCardStyle === 'bordered' ? 'bg-surface/90 border-2 border-primary/40 shadow-2xl backdrop-blur-xl' : loginCardStyle === 'solid' ? 'bg-surface border border-border shadow-xl' : loginBgBlur ? 'bg-surface/85 backdrop-blur-xl border border-white/15 shadow-2xl' : 'bg-surface border border-border-subtle shadow-[var(--shadow-soft)]'} rounded-[16px] p-6 transition-all relative">
         {#if mustChange}
           <form onsubmit={handleSetNewPassword} class="flex flex-col gap-4">
             <p class="text-sm text-amber-600 dark:text-amber-400 text-center">
