@@ -1,8 +1,6 @@
 <script lang="ts">
-  // Port of upstream EditCompatibleNodeModal.js (dashboard/providers/[id]).
   import Badge from '../../lib/ui/Badge.svelte'
   import Button from '../../lib/ui/Button.svelte'
-  import Input from '../../lib/ui/Input.svelte'
   import Modal from '../../lib/ui/Modal.svelte'
   import { api, type ProviderNode, type ProviderNodeLimits, type ProviderNodeLimitsPatch } from '../../api/client'
   import { nodeFormSeed } from './nodeFormSeed'
@@ -20,10 +18,8 @@
       apiType?: string
       baseUrl: string
       urlSuffix: string
-      /** The policy to store; the parent writes it once the node id is final. */
       limits: ProviderNodeLimitsPatch
     }) => Promise<void> | void
-    /** Called with the stored policy after a token-count reset, so the page updates. */
     onLimitsSaved?: (limits: ProviderNodeLimits) => void
   }
 
@@ -39,33 +35,17 @@
   let validating = $state(false)
   let validation = $state<'success' | 'failed' | null>(null)
   let saving = $state(false)
+  let showAdvanced = $state(false)
   let limitsDraft = $state<NodeLimitsDraft>(nodeLimitsDraftOf(null))
   let limitsError = $state('')
-  // A reset answers with the fresh policy before the page's poll does, so show that
-  // instead of mutating the `node` prop.
   let limitsAfterReset = $state<ProviderNodeLimits | null>(null)
 
-  // Seed once per open, not once per `node` object.
-  //
-  // The dashboard polls /api/provider-nodes every 10s and replaces the array,
-  // so `selectedNode` arrives here as a brand-new object with identical
-  // contents every tick. Keying the seed on that identity re-ran this effect
-  // while the user was still typing, overwriting every unsaved field with the
-  // stored value (issue #234). The stable identity of a node is its id, and a
-  // genuine edit — a different node, or a reopen — still has to reseed, or the
-  // form would open carrying the previous node's values.
-  //
-  // Plain variables, not $state: writing them must not be something the effect
-  // reads back and re-trigger on.
   let seededNodeId: string | null = null
   let wasOpen = false
 
   $effect(() => {
     const open = isOpen
     const id = node?.id ?? null
-    // A node that only arrives after the modal opened (id goes null -> id) is
-    // a first seed too, which is why identity is compared against the last
-    // seeded one rather than only against `wasOpen`.
     const shouldSeed = open && !!node && (!wasOpen || id !== seededNodeId)
     wasOpen = open
     if (!shouldSeed || !node) return
@@ -81,6 +61,7 @@
     checkModelId = ''
     validation = null
     saving = false
+    showAdvanced = false
     limitsDraft = nodeLimitsDraftOf(node.limits ?? null)
     limitsError = ''
     limitsAfterReset = null
@@ -91,12 +72,12 @@
   )
 
   async function handleValidate() {
-    if (!checkKey || validating || !formBaseUrl.trim()) return
+    if (!formBaseUrl.trim()) return
     validating = true
     try {
       const res = await api.validateProviderNode({
         baseUrl: formBaseUrl.trim(),
-        apiKey: checkKey,
+        apiKey: checkKey.trim(),
         type: isAnthropic ? 'anthropic-compatible' : 'openai-compatible',
         modelId: checkModelId.trim() || undefined,
       })
@@ -125,11 +106,6 @@
         prefix: formPrefix.trim(),
         baseUrl: formBaseUrl.trim(),
         urlSuffix: formUrlSuffix.trim(),
-        // The policy travels with the node save, and the page writes it *after* the
-        // node: an edited URL suffix renames the provider id, and the limits columns
-        // live on that row. Writing them here, against the id this dialog still
-        // holds, is how an edit would leave the policy on an id that no longer
-        // exists — the node would come back unlimited.
         limits: nodeLimitsPatchOf(limitsDraft),
       }
       if (!isAnthropic) payload.apiType = formApiType
@@ -143,99 +119,185 @@
 </script>
 
 {#if node}
-<Modal {isOpen} title={`Edit ${isAnthropic ? 'Anthropic' : 'OpenAI'} Compatible`} {onClose}>
-  <div class="flex flex-col gap-4">
-    <Input
-      label="Name"
-      bind:value={formName}
-      placeholder={`${isAnthropic ? 'Anthropic' : 'OpenAI'} Compatible (Prod)`}
-      hint="Required. A friendly label for this node."
-    />
-    <Input
-      label="Prefix"
-      bind:value={formPrefix}
-      placeholder={isAnthropic ? 'ac-prod' : 'oc-prod'}
-      hint="Required. Used as the provider prefix for model IDs."
-    />
-    <Input
-      label="Custom URL Suffix"
-      bind:value={formUrlSuffix}
-      placeholder="e.g. bai"
-      hint={node.urlSuffixGenerated
-        ? 'Optional. This provider still carries a randomized suffix; fill this in to name it.'
-        : 'Optional. Changing this renames the provider id and carries this node\'s credentials, models and history with it.'}
-      inputClass="font-mono"
-    />
-    {#if !isAnthropic}
-      <div>
-        <label for="edit-node-api-type" class="text-sm font-medium text-text-main mb-1.5 block">API Type</label>
-        <select
-          id="edit-node-api-type"
-          bind:value={formApiType}
-          class="w-full py-2.5 px-3 pr-10 text-sm text-text-main bg-surface-2 border border-transparent rounded-[10px] appearance-none focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/40 transition-all duration-150"
-        >
-          <option value="chat">Chat Completions</option>
-          <option value="responses">Responses API</option>
-        </select>
+  <Modal {isOpen} title={`Edit ${isAnthropic ? 'Anthropic' : 'OpenAI'} Endpoint`} {onClose}>
+    <div class="flex flex-col gap-4">
+      <!-- 1. Core Fields -->
+      <div class="space-y-3">
+        <div>
+          <label for="edit-node-name" class="block text-xs font-semibold text-text-main mb-1">
+            Provider Name <span class="text-red-500">*</span>
+          </label>
+          <input
+            id="edit-node-name"
+            type="text"
+            bind:value={formName}
+            placeholder={`${isAnthropic ? 'Anthropic' : 'OpenAI'} Endpoint`}
+            class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface text-text-main focus:outline-none focus:border-brand-500"
+            required
+          />
+        </div>
+
+        <div>
+          <label for="edit-node-baseurl" class="block text-xs font-semibold text-text-main mb-1">
+            Base URL <span class="text-red-500">*</span>
+          </label>
+          <input
+            id="edit-node-baseurl"
+            type="text"
+            bind:value={formBaseUrl}
+            placeholder={isAnthropic ? 'https://api.anthropic.com/v1' : 'https://api.openai.com/v1'}
+            class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main focus:outline-none focus:border-brand-500"
+            required
+          />
+        </div>
       </div>
-    {/if}
-    <Input
-      label="Base URL"
-      bind:value={formBaseUrl}
-      placeholder={isAnthropic ? 'https://api.anthropic.com/v1' : 'https://api.openai.com/v1'}
-      hint={`Use the base URL (ending in /v1) for your ${isAnthropic ? 'Anthropic' : 'OpenAI'}-compatible API.`}
-      inputClass="font-mono"
-    />
-    <div class="flex gap-2">
-      <div class="flex-1">
-        <Input
-          label="API Key (for Check)"
-          type="password"
-          bind:value={checkKey}
-        />
+
+      <!-- 2. Test Connection Box -->
+      <div class="p-3 rounded-xl border border-border/70 bg-surface-2/40 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-text-main flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[15px] text-brand-500">verified</span>
+            <span>Test Connection</span>
+          </span>
+          <span class="text-[10px] text-text-muted">Test new endpoint settings</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label for="edit-check-key" class="block text-[10px] font-medium text-text-muted mb-0.5">API Key</label>
+            <input
+              id="edit-check-key"
+              type="password"
+              bind:value={checkKey}
+              placeholder="sk-..."
+              class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-surface font-mono text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500"
+            />
+          </div>
+          <div>
+            <label for="edit-check-model" class="block text-[10px] font-medium text-text-muted mb-0.5">Model ID</label>
+            <input
+              id="edit-check-model"
+              type="text"
+              bind:value={checkModelId}
+              placeholder={isAnthropic ? 'claude-3-5-sonnet-20241022' : 'gpt-4o'}
+              class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-surface text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onclick={handleValidate}
+            disabled={!formBaseUrl.trim() || validating}
+          >
+            {validating ? 'Testing...' : 'Test Connection'}
+          </Button>
+
+          {#if validation}
+            {#if validation === 'success'}
+              <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>Connection Verified!</span>
+              </span>
+            {:else}
+              <span class="inline-flex items-center gap-1 text-xs text-red-500">
+                <span class="material-symbols-outlined text-[16px]">error</span>
+                <span>Connection Failed</span>
+              </span>
+            {/if}
+          {/if}
+        </div>
       </div>
-      <div class="pt-6">
-        <Button
-          variant="secondary"
-          onclick={handleValidate}
-          disabled={!checkKey || validating || !formBaseUrl.trim()}
+
+      <!-- 3. Advanced Settings (Collapsible) -->
+      <div class="border-t border-border/70 pt-2">
+        <button
+          type="button"
+          onclick={() => (showAdvanced = !showAdvanced)}
+          class="flex items-center justify-between w-full text-xs font-semibold text-text-muted hover:text-text-main py-1 cursor-pointer"
         >
-          {validating ? 'Checking...' : 'Check'}
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">settings</span>
+            <span>Advanced Settings (Prefix, URL Suffix, Limits)</span>
+          </span>
+          <span class="material-symbols-outlined text-[16px] transition-transform duration-200 {showAdvanced ? 'rotate-180' : ''}">
+            expand_more
+          </span>
+        </button>
+
+        {#if showAdvanced}
+          <div class="pt-3 space-y-3">
+            <div>
+              <label for="edit-node-prefix" class="block text-xs font-semibold text-text-main mb-1">
+                Model Routing Prefix
+              </label>
+              <input
+                id="edit-node-prefix"
+                type="text"
+                bind:value={formPrefix}
+                placeholder={isAnthropic ? 'ac-prod' : 'oc-prod'}
+                class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main focus:outline-none focus:border-brand-500"
+              />
+              <p class="text-[10px] text-text-muted mt-0.5">
+                Prefix for model IDs (e.g. <code>{formPrefix}/model-name</code>).
+              </p>
+            </div>
+
+            <div>
+              <label for="edit-node-suffix" class="block text-xs font-semibold text-text-main mb-1">
+                Provider ID Suffix
+              </label>
+              <input
+                id="edit-node-suffix"
+                type="text"
+                bind:value={formUrlSuffix}
+                placeholder="e.g. prod, backup"
+                class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main focus:outline-none focus:border-brand-500"
+              />
+            </div>
+
+            {#if !isAnthropic}
+              <div>
+                <label for="edit-node-apitype" class="block text-xs font-semibold text-text-main mb-1">API Type</label>
+                <select
+                  id="edit-node-apitype"
+                  bind:value={formApiType}
+                  class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
+                >
+                  <option value="chat">Chat Completions (/v1/chat/completions)</option>
+                  <option value="responses">Responses API (/v1/responses)</option>
+                </select>
+              </div>
+            {/if}
+
+            <div class="pt-1">
+              <ProviderNodeLimitsField
+                bind:draft={limitsDraft}
+                usage={limitsAfterReset ?? node.limits ?? null}
+                nodeId={node.id}
+                onReset={(limits) => {
+                  limitsAfterReset = limits
+                  onLimitsSaved?.(limits)
+                }}
+              />
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      {#if limitsError}
+        <p class="text-xs text-red-500" role="alert">{limitsError}</p>
+      {/if}
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-border/70">
+        <Button onclick={onClose} variant="ghost">Cancel</Button>
+        <Button onclick={handleSubmit} disabled={saveDisabled}>
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
-    <Input
-      label="Model ID (optional)"
-      bind:value={checkModelId}
-      placeholder="e.g. my-model-id"
-      hint="If provider lacks /models endpoint, enter a model ID to validate via chat/completions instead."
-    />
-    {#if validation}
-      <Badge variant={validation === 'success' ? 'success' : 'error'}>
-        {validation === 'success' ? 'Valid' : 'Invalid'}
-      </Badge>
-    {/if}
-    <!-- Capacity limits use the same fields as the ones above, separated by a rule
-         and collapsed until needed; the Save below stores both, so these are not a
-         second form with a second button. -->
-    <ProviderNodeLimitsField
-      bind:draft={limitsDraft}
-      usage={limitsAfterReset ?? node.limits ?? null}
-      nodeId={node.id}
-      onReset={(limits) => {
-        limitsAfterReset = limits
-        onLimitsSaved?.(limits)
-      }}
-    />
-    {#if limitsError}
-      <p class="text-xs text-red-500" role="alert">{limitsError}</p>
-    {/if}
-    <div class="flex gap-2">
-      <Button onclick={handleSubmit} fullWidth disabled={saveDisabled}>
-        {saving ? 'Saving...' : 'Save'}
-      </Button>
-      <Button onclick={onClose} variant="ghost" fullWidth>Cancel</Button>
-    </div>
-  </div>
-</Modal>
+  </Modal>
 {/if}

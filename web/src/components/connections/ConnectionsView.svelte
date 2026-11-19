@@ -3,7 +3,7 @@
   import { hasAnyNodeLimitPatch } from '../../lib/node-limits'
   import ProvidersOverviewGrid from './ProvidersOverviewGrid.svelte'
   import ProviderDetailView from './ProviderDetailView.svelte'
-  import AddCompatibleNodeModal from './AddCompatibleNodeModal.svelte'
+  import AddCompatibleNodeModal, { type CompatibleNodeType } from './AddCompatibleNodeModal.svelte'
 
   interface Props {
     connections?: ProviderConnection[]
@@ -27,10 +27,10 @@
   }: Props = $props()
 
   let showAddNodeModal = $state(false)
+  let addNodeType = $state<CompatibleNodeType>('openai-compatible')
 
-  // The dialog owns the protocol choice now (#182), so opening it takes no
-  // argument — passing one through onclick would hand this a MouseEvent.
-  function openAddNodeModal() {
+  function openAddNodeModal(type: CompatibleNodeType = 'openai-compatible') {
+    addNodeType = type
     showAddNodeModal = true
   }
 
@@ -110,7 +110,7 @@
 
 <AddCompatibleNodeModal
   isOpen={showAddNodeModal}
-  type="openai-compatible"
+  type={addNodeType}
   allowedTypes={['openai-compatible', 'anthropic-compatible']}
   onClose={() => (showAddNodeModal = false)}
   onSubmit={handleCreateNode}

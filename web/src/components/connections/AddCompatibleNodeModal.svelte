@@ -2,7 +2,6 @@
   import { api } from '../../api/client'
   import Badge from '../../lib/ui/Badge.svelte'
   import Button from '../../lib/ui/Button.svelte'
-  import Input from '../../lib/ui/Input.svelte'
   import Modal from '../../lib/ui/Modal.svelte'
   import ProviderNodeLimitsField from './ProviderNodeLimitsField.svelte'
   import { EMPTY_NODE_LIMITS, nodeLimitsPatchOf, type NodeLimitsDraft } from '../../lib/node-limits'
@@ -38,130 +37,89 @@
     onSubmit,
   }: Props = $props()
 
-  const VARIANT_CONFIG: Record<CompatibleNodeType, {
+  const PRESETS: Array<{
     label: string
-    summary: string
-    title: string
-    defaultBaseUrl: string
-    namePlaceholder: string
-    prefixPlaceholder: string
-    baseUrlHint: string
-    modelIdPlaceholder: string
-    nameHint: string
-    prefixHint: string
-    modelIdHint: string
-    hasApiType: boolean
-  }> = {
-    'openai-compatible': {
-      label: 'OpenAI Compatible',
-      summary: 'Chat Completions or Responses endpoints',
-      title: 'Add Custom Provider',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      namePlaceholder: 'OpenAI Compatible (Prod)',
-      prefixPlaceholder: 'oc-prod',
-      baseUrlHint: 'Use the base URL (ending in /v1) for your OpenAI-compatible API.',
-      modelIdPlaceholder: 'e.g. gpt-4, claude-3-opus',
-      nameHint: 'Required. A friendly label for this node.',
-      prefixHint: 'Required. Used as the provider prefix for model IDs.',
-      modelIdHint: 'If provider lacks /models endpoint, enter a model ID to validate via chat/completions instead.',
-      hasApiType: true,
-    },
-    'anthropic-compatible': {
-      label: 'Anthropic Compatible',
-      summary: 'Endpoints speaking the Anthropic Messages API',
-      title: 'Add Custom Provider',
-      defaultBaseUrl: 'https://api.anthropic.com/v1',
-      namePlaceholder: 'Anthropic Compatible (Prod)',
-      prefixPlaceholder: 'ac-prod',
-      baseUrlHint: 'Use the base URL (ending in /v1) for your Anthropic-compatible API. The system will append /messages.',
-      modelIdPlaceholder: 'e.g. claude-3-opus',
-      nameHint: 'Required. A friendly label for this node.',
-      prefixHint: 'Required. Used as the provider prefix for model IDs.',
-      modelIdHint: 'If provider lacks /models endpoint, enter a model ID to validate via messages instead.',
-      hasApiType: false,
-    },
-    'custom-embedding': {
-      label: 'Custom Embedding',
-      summary: 'OpenAI-compatible /embeddings endpoints',
-      title: 'Add Custom Embedding',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      namePlaceholder: 'Voyage AI',
-      prefixPlaceholder: 'voyage',
-      baseUrlHint: 'Most embedding APIs are OpenAI-compatible: Voyage, Cohere, Jina, Mistral, Together...',
-      modelIdPlaceholder: 'e.g. voyage-3, embed-english-v3.0, text-embedding-3-small',
-      nameHint: 'Required. A friendly label for this embedding provider.',
-      prefixHint: 'Required. Used as the provider prefix for model IDs (e.g. voyage/voyage-3).',
-      modelIdHint: 'Required for validation. Will send a test embeddings request.',
-      hasApiType: false,
-    },
-  }
+    name: string
+    type: CompatibleNodeType
+    url: string
+  }> = [
+    { label: 'OpenAI (Official)', name: 'OpenAI', type: 'openai-compatible', url: 'https://api.openai.com/v1' },
+    { label: 'Anthropic (Claude)', name: 'Anthropic', type: 'anthropic-compatible', url: 'https://api.anthropic.com/v1' },
+    { label: 'DeepSeek', name: 'DeepSeek', type: 'openai-compatible', url: 'https://api.deepseek.com/v1' },
+    { label: 'Ollama (Local)', name: 'Ollama', type: 'openai-compatible', url: 'http://localhost:11434/v1' },
+    { label: 'vLLM / LM Studio', name: 'Local vLLM', type: 'openai-compatible', url: 'http://localhost:8000/v1' },
+    { label: 'OpenRouter', name: 'OpenRouter', type: 'openai-compatible', url: 'https://openrouter.ai/api/v1' },
+  ]
 
-  // The node type lives in local state so switching it inside the modal keeps
-  // every field the user already typed. Picking the wrong protocol used to
-  // mean closing the modal and retyping the whole form (#182).
   let selectedType = $state<CompatibleNodeType>('openai-compatible')
-
   let formName = $state('')
   let formPrefix = $state('')
-  let formUrlSuffix = $state('')
-  let formApiType = $state<'chat' | 'responses'>('chat')
-  let formBaseUrl = $state('')
+  let userEditedPrefix = $state(false)
+  let formBaseUrl = $state('https://api.openai.com/v1')
   let checkKey = $state('')
   let checkModelId = $state('')
   let validating = $state(false)
   let validationResult = $state<{ valid: boolean; error?: string; method?: string; dimensions?: number } | null>(null)
   let submitting = $state(false)
-  // A new node has no policy yet, so the section starts closed; the values travel
-  // with the create and are written right after it (the limits endpoint needs the
-  // node id, which only exists once the create answers).
+
+  // Advanced settings (collapsed by default to prevent UI overwhelm)
+  let showAdvanced = $state(false)
+  let formUrlSuffix = $state('')
+  let formApiType = $state<'chat' | 'responses'>('chat')
   let limitsDraft = $state<NodeLimitsDraft>({ ...EMPTY_NODE_LIMITS })
 
-  let typeOptions = $derived(allowedTypes.map((t) => ({ value: t, ...VARIANT_CONFIG[t] })))
-  let config = $derived(VARIANT_CONFIG[selectedType])
+  function handleNameChange(val: string) {
+    formName = val
+    if (!userEditedPrefix) {
+      const slug = val
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+      formPrefix = slug
+    }
+  }
 
-  // The literal the backend pins in front of the suffix, so the field can show
-  // the provider id the user is about to create instead of a bare "suffix".
-  let idLiteral = $derived(
-    selectedType === 'anthropic-compatible'
-      ? 'anthropic-compatible'
-      : selectedType === 'custom-embedding'
-        ? 'custom-embedding'
-        : `openai-compatible-${formApiType}`
-  )
-  let composedID = $derived(formUrlSuffix.trim() ? `${idLiteral}-${formUrlSuffix.trim()}` : '')
+  function applyPreset(preset: typeof PRESETS[0]) {
+    selectedType = preset.type
+    formName = preset.name
+    formPrefix = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    userEditedPrefix = false
+    formBaseUrl = preset.url
+    validationResult = null
+  }
 
-  // Reset the form when the modal opens.
+  function selectType(next: CompatibleNodeType) {
+    if (next === selectedType) return
+    selectedType = next
+    validationResult = null
+    if (next === 'anthropic-compatible' && (formBaseUrl === 'https://api.openai.com/v1' || !formBaseUrl)) {
+      formBaseUrl = 'https://api.anthropic.com/v1'
+    } else if (next === 'openai-compatible' && (formBaseUrl === 'https://api.anthropic.com/v1' || !formBaseUrl)) {
+      formBaseUrl = 'https://api.openai.com/v1'
+    }
+  }
+
+  // Reset form when modal opens
   $effect(() => {
     if (isOpen) {
       selectedType = type
       formName = ''
       formPrefix = ''
+      userEditedPrefix = false
       formUrlSuffix = ''
       formApiType = 'chat'
       checkKey = ''
       checkModelId = ''
       validationResult = null
       submitting = false
-      formBaseUrl = (VARIANT_CONFIG[type] ?? VARIANT_CONFIG[selectedType]).defaultBaseUrl
+      showAdvanced = false
+      formBaseUrl = type === 'anthropic-compatible' ? 'https://api.anthropic.com/v1' : 'https://api.openai.com/v1'
     }
   })
 
-  // Switching type mid-form is the whole point of the unified dialog (#182), so
-  // only the protocol-specific parts move: the base URL follows the new
-  // protocol when it still holds the old default, everything the user typed
-  // survives, and a stale Check result is dropped rather than shown as valid.
-  function selectType(next: CompatibleNodeType) {
-    if (next === selectedType) return
-    const previousDefault = VARIANT_CONFIG[selectedType].defaultBaseUrl
-    selectedType = next
-    validationResult = null
-    if (formBaseUrl.trim() === '' || formBaseUrl.trim() === previousDefault) {
-      formBaseUrl = VARIANT_CONFIG[next].defaultBaseUrl
-    }
-  }
-
-
   async function handleCheck() {
+    if (!formBaseUrl.trim()) return
     validating = true
     try {
       validationResult = await api.validateProviderNode({
@@ -188,7 +146,7 @@
       name: formName.trim(),
       prefix: formPrefix.trim(),
       baseUrl: formBaseUrl.trim(),
-      apiType: config.hasApiType ? formApiType : undefined,
+      apiType: selectedType === 'openai-compatible' ? formApiType : undefined,
       type: selectedType,
       urlSuffix: formUrlSuffix.trim(),
       limits: nodeLimitsPatchOf(limitsDraft),
@@ -198,144 +156,247 @@
   }
 </script>
 
-<Modal {isOpen} title={config.title} {onClose}>
+<Modal {isOpen} title="Add Compatible Provider" {onClose}>
   <div class="flex flex-col gap-4">
-    <fieldset class="flex flex-col gap-2">
-      <legend class="text-sm font-medium text-text-main">Provider Type</legend>
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Provider Type">
-        {#each typeOptions as option (option.value)}
+    <!-- 1. Protocol Selector: Big, clear visual cards -->
+    <div class="space-y-1.5">
+      <label class="text-xs font-semibold text-text-muted uppercase tracking-wider block">
+        API Protocol Format
+      </label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onclick={() => selectType('openai-compatible')}
+          class="flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer {selectedType === 'openai-compatible'
+            ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
+            : 'border-border bg-surface hover:bg-surface-2'}"
+        >
+          <div class="size-8 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-[18px]">neurology</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-text-main">OpenAI Compatible</span>
+              {#if selectedType === 'openai-compatible'}
+                <span class="material-symbols-outlined text-[16px] text-emerald-500">check_circle</span>
+              {/if}
+            </div>
+            <p class="text-[11px] text-text-muted truncate">OpenAI, DeepSeek, vLLM, Ollama, Groq</p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => selectType('anthropic-compatible')}
+          class="flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer {selectedType === 'anthropic-compatible'
+            ? 'border-purple-500 bg-purple-500/10 shadow-xs'
+            : 'border-border bg-surface hover:bg-surface-2'}"
+        >
+          <div class="size-8 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-[18px]">psychology</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-text-main">Anthropic Compatible</span>
+              {#if selectedType === 'anthropic-compatible'}
+                <span class="material-symbols-outlined text-[16px] text-purple-500">check_circle</span>
+              {/if}
+            </div>
+            <p class="text-[11px] text-text-muted truncate">Claude, Anthropic Messages API</p>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. Quick Presets -->
+    <div class="space-y-1.5">
+      <span class="text-[11px] font-medium text-text-muted">Quick Presets:</span>
+      <div class="flex flex-wrap gap-1.5">
+        {#each PRESETS as preset}
           <button
             type="button"
-            role="radio"
-            aria-checked={selectedType === option.value}
-            onclick={() => selectType(option.value)}
-            class="flex flex-col items-start gap-0.5 rounded-[10px] border px-3 py-2 text-left transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 {selectedType === option.value
-              ? 'border-brand-500 bg-brand-500/10'
-              : 'border-border bg-surface-2 hover:border-brand-500/40'}"
+            onclick={() => applyPreset(preset)}
+            class="px-2.5 py-1 rounded-lg text-[11px] font-medium border border-border/80 bg-surface hover:bg-surface-2 text-text-main transition-colors cursor-pointer"
           >
-            <span class="flex w-full items-center justify-between gap-2">
-              <span class="text-sm font-medium text-text-main">{option.label}</span>
-              {#if selectedType === option.value}
-                <span class="material-symbols-outlined text-[16px] text-brand-500" aria-hidden="true">check</span>
-              {/if}
-            </span>
-            <span class="text-xs text-text-muted">{option.summary}</span>
+            {preset.label}
           </button>
         {/each}
       </div>
-      <p class="text-xs text-text-muted">
-        Already entered your endpoint? Switch type here — your name, prefix and base URL stay put.
-      </p>
-    </fieldset>
+    </div>
 
-    <Input
-      label="Name"
-      bind:value={formName}
-      placeholder={config.namePlaceholder}
-      hint={config.nameHint}
-      required
-    />
-
-    <Input
-      label="Prefix"
-      bind:value={formPrefix}
-      placeholder={config.prefixPlaceholder}
-      hint={config.prefixHint}
-      required
-    />
-
-    <Input
-      label="Custom URL Suffix"
-      bind:value={formUrlSuffix}
-      placeholder="e.g. bai"
-      hint={composedID
-        ? `Optional. Replaces the random suffix of this provider id: ${composedID}`
-        : `Optional. Leave blank to keep a randomized suffix for '${idLiteral}-<this_is_user_custom_suffix>'.`}
-      inputClass="font-mono"
-    />
-
-    {#if config.hasApiType}
+    <!-- 3. Primary Fields: Name & Base URL -->
+    <div class="space-y-3 pt-1">
       <div>
-        <label for="api-type" class="text-sm font-medium text-text-main mb-1.5 block">API Type</label>
-        <select
-          id="api-type"
-          bind:value={formApiType}
-          class="w-full py-2.5 px-3 text-sm text-text-main bg-surface-2 rounded-[10px] border border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/40 transition-all duration-150 ease-out text-[16px] sm:text-sm"
-        >
-          <option value="chat">Chat Completions</option>
-          <option value="responses">Responses API</option>
-        </select>
+        <label for="compat-node-name" class="block text-xs font-semibold text-text-main mb-1">
+          Provider Name <span class="text-red-500">*</span>
+        </label>
+        <input
+          id="compat-node-name"
+          type="text"
+          value={formName}
+          oninput={(e) => handleNameChange((e.target as HTMLInputElement).value)}
+          placeholder="e.g. OpenAI (Official), DeepSeek, Local vLLM"
+          class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors"
+          required
+        />
+        <p class="text-[10px] text-text-muted mt-0.5">A clear name for this provider endpoint in your dashboard.</p>
       </div>
-    {/if}
 
-    <Input
-      label="Base URL"
-      bind:value={formBaseUrl}
-      placeholder={config.defaultBaseUrl}
-      hint={config.baseUrlHint}
-      inputClass="font-mono"
-      required
-    />
+      <div>
+        <label for="compat-node-url" class="block text-xs font-semibold text-text-main mb-1">
+          Base URL <span class="text-red-500">*</span>
+        </label>
+        <input
+          id="compat-node-url"
+          type="text"
+          bind:value={formBaseUrl}
+          placeholder="https://api.openai.com/v1"
+          class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors"
+          required
+        />
+        <p class="text-[10px] text-text-muted mt-0.5">Endpoint URL ending in <code>/v1</code> (e.g. <code>https://api.openai.com/v1</code> or <code>http://localhost:11434/v1</code>).</p>
+      </div>
+    </div>
 
-    <Input
-      label="API Key (for Check)"
-      type="password"
-      bind:value={checkKey}
-    />
+    <!-- 4. Test & Verification (Optional) -->
+    <div class="p-3 rounded-xl border border-border/70 bg-surface-2/40 space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-text-main flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px] text-brand-500">verified</span>
+          <span>Test Connection (Optional)</span>
+        </span>
+        <span class="text-[10px] text-text-muted">Verify before saving</span>
+      </div>
 
-    <Input
-      label="Model ID (for Check)"
-      bind:value={checkModelId}
-      placeholder={config.modelIdPlaceholder}
-      hint={config.modelIdHint}
-    />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label for="compat-check-key" class="block text-[10px] font-medium text-text-muted mb-0.5">API Key</label>
+          <input
+            id="compat-check-key"
+            type="password"
+            bind:value={checkKey}
+            placeholder="sk-..."
+            class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-surface font-mono text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500"
+          />
+        </div>
+        <div>
+          <label for="compat-check-model" class="block text-[10px] font-medium text-text-muted mb-0.5">Model ID</label>
+          <input
+            id="compat-check-model"
+            type="text"
+            bind:value={checkModelId}
+            placeholder={selectedType === 'anthropic-compatible' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o'}
+            class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-surface text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500"
+          />
+        </div>
+      </div>
 
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <Button
-        onclick={handleCheck}
-        disabled={!checkKey.trim() || validating || !formBaseUrl.trim()}
-        variant="secondary"
-        class="w-full sm:w-auto"
-      >
-        {validating ? 'Checking...' : 'Check'}
-      </Button>
-      {#if validationResult}
-        {#if validationResult.valid}
-          <span class="inline-flex items-center gap-1.5">
-            <Badge tone="success">Valid</Badge>
-            {#if validationResult.method === 'chat'}
-              <span class="text-sm text-text-muted">(via inference test)</span>
-            {:else if validationResult.dimensions}
-              <span class="text-sm text-text-muted">{validationResult.dimensions} dims</span>
-            {/if}
-          </span>
-        {:else}
-          <div class="flex flex-col gap-1">
-            <Badge tone="error">Invalid</Badge>
-            {#if validationResult.error}
-              <span class="text-sm text-red-500">{validationResult.error}</span>
-            {/if}
-          </div>
+      <div class="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onclick={handleCheck}
+          disabled={!formBaseUrl.trim() || validating}
+        >
+          {validating ? 'Testing...' : 'Test Connection'}
+        </Button>
+
+        {#if validationResult}
+          {#if validationResult.valid}
+            <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <span class="material-symbols-outlined text-[16px]">check_circle</span>
+              <span>Connection Verified!</span>
+            </span>
+          {:else}
+            <span class="inline-flex items-center gap-1 text-xs text-red-500 max-w-[200px] truncate" title={validationResult.error}>
+              <span class="material-symbols-outlined text-[16px]">error</span>
+              <span class="truncate">{validationResult.error || 'Connection Failed'}</span>
+            </span>
+          {/if}
         {/if}
+      </div>
+    </div>
+
+    <!-- 5. Advanced Settings (Collapsible) -->
+    <div class="border-t border-border/70 pt-2">
+      <button
+        type="button"
+        onclick={() => (showAdvanced = !showAdvanced)}
+        class="flex items-center justify-between w-full text-xs font-semibold text-text-muted hover:text-text-main py-1 cursor-pointer"
+      >
+        <span class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">settings</span>
+          <span>Advanced Settings (Model Prefix, API Type, Limits)</span>
+        </span>
+        <span class="material-symbols-outlined text-[16px] transition-transform duration-200 {showAdvanced ? 'rotate-180' : ''}">
+          expand_more
+        </span>
+      </button>
+
+      {#if showAdvanced}
+        <div class="pt-3 space-y-3">
+          <div>
+            <label for="compat-node-prefix" class="block text-xs font-semibold text-text-main mb-1">
+              Model Routing Prefix
+            </label>
+            <input
+              id="compat-node-prefix"
+              type="text"
+              bind:value={formPrefix}
+              oninput={() => (userEditedPrefix = true)}
+              placeholder="e.g. openai, deepseek"
+              class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main focus:outline-none focus:border-brand-500"
+            />
+            <p class="text-[10px] text-text-muted mt-0.5">
+              Used in model strings (e.g. <code>{formPrefix || 'provider'}/model-id</code>). Auto-filled from name.
+            </p>
+          </div>
+
+          <div>
+            <label for="compat-node-suffix" class="block text-xs font-semibold text-text-main mb-1">
+              Custom Provider ID Suffix (Optional)
+            </label>
+            <input
+              id="compat-node-suffix"
+              type="text"
+              bind:value={formUrlSuffix}
+              placeholder="e.g. prod, backup"
+              class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface font-mono text-text-main focus:outline-none focus:border-brand-500"
+            />
+          </div>
+
+          {#if selectedType === 'openai-compatible'}
+            <div>
+              <label for="compat-api-type" class="block text-xs font-semibold text-text-main mb-1">API Type</label>
+              <select
+                id="compat-api-type"
+                bind:value={formApiType}
+                class="w-full px-3 py-2 text-xs rounded-lg border border-border bg-surface text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
+              >
+                <option value="chat">Chat Completions (/v1/chat/completions)</option>
+                <option value="responses">Responses API (/v1/responses)</option>
+              </select>
+            </div>
+          {/if}
+
+          <div class="pt-1">
+            <ProviderNodeLimitsField bind:draft={limitsDraft} />
+          </div>
+        </div>
       {/if}
     </div>
 
-    <!-- Capacity limits use the same fields as the ones above, separated by a rule
-         and collapsed until needed. They travel with the create and are written
-         immediately afterwards, because the limits endpoint needs the node id. -->
-    <ProviderNodeLimitsField bind:draft={limitsDraft} />
-
-    <div class="flex flex-col gap-2 sm:flex-row">
+    <!-- Modal Footer Actions -->
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-border/70">
+      <Button onclick={onClose} variant="ghost">
+        Cancel
+      </Button>
       <Button
         type="button"
         onclick={handleSubmit}
-        fullWidth
         disabled={!formName.trim() || !formPrefix.trim() || !formBaseUrl.trim() || submitting}
       >
-        {submitting ? 'Creating...' : 'Create'}
-      </Button>
-      <Button onclick={onClose} variant="ghost" fullWidth>
-        Cancel
+        {submitting ? 'Creating Endpoint...' : 'Create Endpoint'}
       </Button>
     </div>
   </div>
