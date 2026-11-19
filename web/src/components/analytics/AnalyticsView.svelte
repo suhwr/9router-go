@@ -89,8 +89,10 @@
   })
 
   let stats = $state<StatsData>({})
+  let stats3d = $state<StatsData | null>(null)
   let activeRequests = $state<ActiveRequestItem[]>([])
   let pulseProvider = $state<string>('')
+  let activePulseMap = $state<Record<string, number>>({})
   let lastProvider = $state<string>('')
   let errorProvider = $state<string>('')
 
@@ -108,11 +110,30 @@
 
   function triggerPulse(provider: string) {
     if (!provider) return
+    const key = provider.toLowerCase().trim()
     pulseProvider = provider
+    activePulseMap = { ...activePulseMap, [key]: Date.now() + 2500 }
     if (pulseTimer) clearTimeout(pulseTimer)
     pulseTimer = setTimeout(() => {
       pulseProvider = ''
-    }, 3000)
+      const now = Date.now()
+      const nextMap: Record<string, number> = {}
+      for (const [k, exp] of Object.entries(activePulseMap)) {
+        if (now < exp) nextMap[k] = exp
+      }
+      activePulseMap = nextMap
+    }, 2600)
+  }
+
+  async function loadTopology3dStats() {
+    try {
+      const res = await api.getUsageStats('3d', 'none')
+      if (res && res.byProvider) {
+        stats3d = res
+      }
+    } catch (err) {
+      console.warn('Failed to load 3d stats for topology:', err)
+    }
   }
   // mergeRecent unions an incoming SSE list with what is on screen. The SSE
   // stream carries only this process's in-memory ring, so a plain replace
@@ -188,6 +209,9 @@
         }
         if (res.errorProvider) {
           errorProvider = res.errorProvider
+        }
+        if (!stats3d || views !== 'none') {
+          loadTopology3dStats()
         }
       }
     } catch (err) {
@@ -286,6 +310,9 @@
 
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('9router_key') || '' : ''
     let streamInitialized = false
+    const seenRecentSignatures = new Set<string>()
+    const reqSig = (r: RecentRequestItem) =>
+      `${r.timestamp || ''}|${r.model || ''}|${r.provider || ''}|${r.promptTokens || 0}|${r.completionTokens || 0}`
 
     const connectStream = async () => {
       if (isCancelled) return
@@ -323,22 +350,34 @@
             try {
               const data = JSON.parse(trimmed.slice(6))
               if (Array.isArray(data.recentRequests) && data.recentRequests.length > 0) {
-                const prevTop = stats.recentRequests?.[0]
-                const newTop = data.recentRequests[0]
-                // Only pulse animation when a GENUINE new model request arrives AFTER stream initialization
-                if (streamInitialized && prevTop) {
-                  const isNewRequest =
-                    newTop.timestamp !== prevTop.timestamp ||
-                    newTop.model !== prevTop.model ||
-                    newTop.tokens !== prevTop.tokens
-                  if (isNewRequest && newTop.provider) {
-                    lastProvider = newTop.provider
-                    triggerPulse(newTop.provider)
+                if (streamInitialized) {
+                  for (const r of data.recentRequests) {
+                    if (!r) continue
+                    const sig = reqSig(r)
+                    if (!seenRecentSignatures.has(sig)) {
+                      seenRecentSignatures.add(sig)
+                      if (r.provider) {
+                        lastProvider = r.provider
+                        triggerPulse(r.provider)
+                      }
+                    }
                   }
-                } else if (!lastProvider && newTop.provider) {
-                  lastProvider = newTop.provider
+                  if (seenRecentSignatures.size > 200) {
+                    const arr = Array.from(seenRecentSignatures)
+                    seenRecentSignatures.clear()
+                    for (const s of arr.slice(arr.length - 100)) {
+                      seenRecentSignatures.add(s)
+                    }
+                  }
+                } else {
+                  for (const r of data.recentRequests) {
+                    if (r) seenRecentSignatures.add(reqSig(r))
+                  }
+                  if (!lastProvider && data.recentRequests[0]?.provider) {
+                    lastProvider = data.recentRequests[0].provider
+                  }
+                  streamInitialized = true
                 }
-                streamInitialized = true
                 stats = { ...stats, recentRequests: mergeRecent(stats.recentRequests, data.recentRequests) }
               }
               if (Array.isArray(data.activeRequests)) {
@@ -384,6 +423,7 @@
     const breakdownTimer = setInterval(() => {
       if (section === 'overview' && (typeof document === 'undefined' || !document.hidden)) {
         loadStats(period)
+        loadTopology3dStats()
       }
     }, 30000)
 
@@ -401,8 +441,13 @@
     for (const n of providerNodes || []) {
       if (n?.id && n?.name) {
         m.set(n.id, n.name)
-        // Also index by lowercased id so lookups from lowercased keys still match
         m.set(n.id.toLowerCase().trim(), n.name)
+        if (n.urlSuffix) {
+          m.set(n.urlSuffix.toLowerCase().trim(), n.name)
+        }
+        if (n.prefix) {
+          m.set(n.prefix.toLowerCase().trim(), n.name)
+        }
       }
     }
     return m
@@ -433,41 +478,34 @@
 
   let topologyProviders = $derived.by(() => {
     const seen = new Set<string>()
-    const list: { id: string; alias?: string; name: string; color?: string; type: string }[] = []
+    const list: { id: string; alias?: string; name: string; color?: string; type: string; requests?: number }[] = []
 
-    // "Who is on the bus" is a usage question, so every source below is
-    // measured against the same window. The backend keys usage by the
-    // canonical provider id, while a connection row can hold either that or
-    // the published alias, so both are tried before a provider counts as idle.
-    const usedInPeriod = (provId: string) => {
+    // The topology map displays the active routing network in the 3-day context
+    const usage3d = stats3d?.byProvider || stats.byProvider || {}
+
+    const has3dUsage = (provId: string) => {
+      if (!provId) return false
       const raw = provId.trim()
       const canonical = raw.toLowerCase()
-      const cat = PROVIDER_CATALOG.find((p) => p.id.toLowerCase() === canonical || p.alias?.toLowerCase() === canonical)
-      // A custom node id is stored verbatim by the backend ("openai-compatible-chat-Wildy"),
-      // so `stats.byProvider` is keyed by that raw case. Check both raw and lowercased
-      // variants alongside catalog ids so mixed-case nodes aren't judged idle.
+      const cat = PROVIDER_CATALOG.find((p) => p.id.toLowerCase() === canonical || (p.alias && p.alias.toLowerCase() === canonical))
       const keys = [raw, canonical, cat?.id, cat?.alias].filter(Boolean) as string[]
-      return keys.some((k) => (stats.byProvider?.[k]?.requests || 0) > 0)
+      return keys.some((k) => (usage3d[k]?.requests || 0) > 0)
     }
+
     const addProvider = (provId: string, type: string, customName?: string) => {
       if (!provId) return
       const raw = provId.trim()
       const canonical = raw.toLowerCase()
       const cat = PROVIDER_CATALOG.find((p) => p.id.toLowerCase() === canonical || (p.alias && p.alias.toLowerCase() === canonical))
-      // A provider the registry hides stays routable, but it has no place in a
-      // map that reads as "who is on the bus" — the same reason it is kept out
-      // of the provider list.
       if (cat?.hidden) return
-      // Custom compatible nodes keep the operator's casing ("...-Wildy") so
-      // node-name lookups, icon paths, and usage history agree with what the
-      // database actually stored.
+
       const targetId = cat?.id || raw
       if (seen.has(canonical) || seen.has(targetId)) return
       seen.add(targetId)
       seen.add(canonical)
       if (cat?.alias) seen.add(cat.alias.toLowerCase())
 
-      const reqCount = (stats.byProvider?.[targetId]?.requests || stats.byProvider?.[canonical]?.requests || 0)
+      const reqCount = (usage3d[targetId]?.requests || usage3d[canonical]?.requests || 0)
       list.push({
         id: targetId,
         alias: cat?.alias,
@@ -478,47 +516,51 @@
       })
     }
 
-    // 1. Prioritize active & live providers so lines to models in use never get dropped
+    // 1. Live in-flight requests (highest priority)
     for (const r of activeRequests) {
-      if (r.provider) addProvider(r.provider, 'active')
+      if (r?.provider) addProvider(r.provider, 'active')
+    }
+
+    // 2. Active recent pulses (requests completed in last 2.5s)
+    const now = Date.now()
+    for (const [prov, exp] of Object.entries(activePulseMap)) {
+      if (now < exp) addProvider(prov, 'active')
     }
     if (pulseProvider) addProvider(pulseProvider, 'active')
-    if (lastProvider) addProvider(lastProvider, 'recent')
-    if (errorProvider) addProvider(errorProvider, 'error')
 
-    // 2. Add recent requests
+    // 3. Recent requests list
     for (const r of stats.recentRequests || []) {
-      if (r.provider) addProvider(r.provider, 'recent')
+      if (r?.provider) addProvider(r.provider, 'recent')
     }
 
-    // 3. Add all user-configured connections
+    // 4. All providers with requests in the 3-day context from usage3d
+    for (const [provId, usage] of Object.entries(usage3d)) {
+      if (usage && usage.requests > 0) {
+        addProvider(provId, 'stats')
+      }
+    }
+
+    // 5. User-configured connections ONLY if used in the 3-day context
     for (const c of connections) {
-      if (c.provider) {
+      if (c?.provider && has3dUsage(c.provider)) {
         addProvider(c.provider, 'connection', c.name || undefined)
       }
     }
 
-    // 4. Add all custom provider nodes
+    // 6. Custom provider nodes ONLY if used in the 3-day context
     for (const n of providerNodes || []) {
-      if (n?.id) {
+      if (n?.id && (has3dUsage(n.id) || (n.prefix && has3dUsage(n.prefix)))) {
         addProvider(n.id, 'custom', n.name)
       }
     }
 
-    // 5. Add historical providers with usage across time
-    if (stats.byProvider) {
-      for (const prov of Object.keys(stats.byProvider)) {
-        addProvider(prov, 'stats')
-      }
-    }
-
-    // 6. Free/no-auth defaults if used
+    // 7. Free/no-auth defaults if used in the 3-day context
     const FREE_DEFAULTS = ['antigravity', 'opencode', 'nvidia', 'openrouter', 'clinepass']
     for (const f of FREE_DEFAULTS) {
-      if (usedInPeriod(f)) addProvider(f, 'default')
+      if (has3dUsage(f)) addProvider(f, 'default')
     }
 
-    // Deterministic sorting so node positions never jump or shuffle when active requests fire
+    // Deterministic sorting so node positions never jump or shuffle
     list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
 
     return list
@@ -737,10 +779,14 @@
   <ProviderTopologyCard
     providers={topologyProviders}
     {activeRequests}
+    {activePulseMap}
     {pulseProvider}
     {lastProvider}
     {errorProvider}
-    onRefresh={() => loadStats(period)}
+    onRefresh={() => {
+      loadStats(period)
+      loadTopology3dStats()
+    }}
   />
 {/snippet}
 

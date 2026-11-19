@@ -16,6 +16,7 @@
   interface Props {
     providers?: ProviderNodeItem[]
     activeRequests?: ActiveRequestItem[]
+    activePulseMap?: Record<string, number>
     pulseProvider?: string
     lastProvider?: string
     errorProvider?: string
@@ -25,6 +26,7 @@
   let {
     providers = [],
     activeRequests = [],
+    activePulseMap = {},
     pulseProvider = '',
     lastProvider = '',
     errorProvider = '',
@@ -36,19 +38,15 @@
     [...providers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
   )
 
-  let activeProviderIds = $derived.by(() => {
-    const set = new Set<string>()
-    for (const r of activeRequests) {
-      const p = r.provider?.toLowerCase().trim()
-      if (p) set.add(p)
+  let activeCount = $derived.by(() => {
+    let count = activeRequests.reduce((sum, r) => sum + (r.count || 1), 0)
+    const now = Date.now()
+    for (const [id, expiry] of Object.entries(activePulseMap)) {
+      if (now < expiry) count++
     }
-    return set
+    if (pulseProvider) count++
+    return count
   })
-
-  let hasPulse = $derived(Boolean(pulseProvider))
-  let activeCount = $derived(
-    Math.max(activeRequests.reduce((sum, r) => sum + (r.count || 1), 0), hasPulse ? 1 : 0)
-  )
 
   // STAGED CARDIAC RHYTHM:
   // Idle (0 active requests): Calm, serene, gentle breathing rhythm (~4.8s cycle / ~12 BPM).
@@ -146,14 +144,36 @@
       const isMatch = (target: string) => {
         if (!target) return false
         const t = target.toLowerCase().trim()
-        return t === pid || t === pname || (Boolean(palias) && t === palias)
+        if (t === pid || (pname && t === pname) || (palias && t === palias)) return true
+        if (pid.includes(t) || t.includes(pid)) return true
+        if (pname && (pname.includes(t) || t.includes(pname))) return true
+        return false
       }
 
-      const isActive =
-        activeProviderIds.has(pid) ||
-        activeProviderIds.has(pname) ||
-        (Boolean(palias) && activeProviderIds.has(palias)) ||
-        (hasPulse && isMatch(pulseProvider))
+      // Check real-time active in-flight requests
+      let isActive = false
+      for (const r of activeRequests) {
+        if (r?.provider && isMatch(r.provider)) {
+          isActive = true
+          break
+        }
+      }
+
+      // Check live pulses (requests completed in last 2.5s)
+      if (!isActive) {
+        const now = Date.now()
+        for (const [pulsingId, expiry] of Object.entries(activePulseMap)) {
+          if (now < expiry && isMatch(pulsingId)) {
+            isActive = true
+            break
+          }
+        }
+      }
+
+      if (!isActive && pulseProvider && isMatch(pulseProvider)) {
+        isActive = true
+      }
+
       const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
       const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
 
@@ -436,89 +456,70 @@
           {/if}
         </g>
 
-        <!-- 3. TRAVELING BLUE DOTS ON IDLE & ACTIVE (Staged Cascading Packet Waves) -->
-        {#each geometry.nodes as node, idx (node.id)}
-          <circle r="3" fill="#38bdf8" opacity="0">
-            <animateMotion
-              dur="{heartbeatDuration}s"
-              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
-              repeatCount="indefinite"
-              path={node.curvePath}
-            />
-            <animate
-              attributeName="opacity"
-              values="0;0.85;0.85;0"
-              keyTimes="0;0.15;0.85;1"
-              dur="{heartbeatDuration}s"
-              begin="{((idx / Math.max(1, geometry.nodes.length)) * heartbeatDuration).toFixed(2)}s"
-              repeatCount="indefinite"
-            />
-          </circle>
-        {/each}
-
-        <!-- 4. Active Stream Laser Beams & Comets (Mounted when isActive) -->
+        <!-- 3. Dynamic Streams with Smooth Fade In / Fade Out Transitions -->
         {#each geometry.nodes as node (node.id)}
-          {#if node.isActive}
-            <g class="topology-active-stream">
-              <!-- Wide neon ambient glow aura -->
-              <path
-                d={node.curvePath}
-                fill="none"
-                stroke={node.color || '#3b82f6'}
-                stroke-width="7"
-                stroke-opacity="0.28"
-                stroke-linecap="round"
-              />
-              <!-- Laser forward energy beam -->
-              <path
-                d={node.curvePath}
-                fill="none"
-                stroke="url(#active-beam-{node.id})"
-                stroke-width="2.6"
-                stroke-linecap="round"
-                class="topology-edge-flow"
-              />
-              <!-- Emerald return stream -->
-              <path
-                d={node.returnPath}
-                fill="none"
-                stroke="#10b981"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                class="topology-edge-flow-reverse"
-              />
-              <!-- High-energy token packet comets -->
-              <circle r="4.2" fill="#38bdf8" opacity="0">
-                <animateMotion dur="1.2s" repeatCount="indefinite" path={node.curvePath} />
-                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.2s" repeatCount="indefinite" />
-              </circle>
-              <circle r="3.6" fill="#34d399" opacity="0">
-                <animateMotion dur="1.4s" repeatCount="indefinite" path={node.returnPath} />
-                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.4s" repeatCount="indefinite" />
-              </circle>
-            </g>
-          {:else if node.isLast}
-            <!-- Warm amber recent trace -->
+          <!-- Active Stream: Neon Glow Aura & Laser Beams (Smooth Fade In & Decay Fade Out) -->
+          <g
+            class="pointer-events-none transition-opacity duration-700 ease-out"
+            style="opacity: {node.isActive ? 1 : 0};"
+          >
+            <!-- Wide neon ambient glow aura -->
+            <path
+              d={node.curvePath}
+              fill="none"
+              stroke={node.color || '#3b82f6'}
+              stroke-width="6"
+              stroke-opacity="0.32"
+              stroke-linecap="round"
+            />
+            <!-- Laser forward energy beam -->
+            <path
+              d={node.curvePath}
+              fill="none"
+              stroke="url(#active-beam-{node.id})"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              class="topology-edge-flow"
+            />
+            <!-- Emerald return data stream -->
+            <path
+              d={node.returnPath}
+              fill="none"
+              stroke="#10b981"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              class="topology-edge-flow-reverse"
+            />
+          </g>
+
+          <!-- Warm Amber Recent Trace (Smooth Fade In / Fade Out) -->
+          <g
+            class="pointer-events-none transition-opacity duration-700 ease-out"
+            style="opacity: {!node.isActive && node.isLast ? 0.75 : 0};"
+          >
             <path
               d={node.curvePath}
               fill="none"
               stroke="#f59e0b"
               stroke-width="1.8"
               stroke-dasharray="4 4"
-              opacity="0.7"
               class="topology-edge-flow"
             />
-          {:else if node.isError}
-            <!-- Red error trace -->
+          </g>
+
+          <!-- Red Error Trace (Smooth Fade In / Fade Out) -->
+          <g
+            class="pointer-events-none transition-opacity duration-700 ease-out"
+            style="opacity: {!node.isActive && node.isError ? 0.85 : 0};"
+          >
             <path
               d={node.curvePath}
               fill="none"
               stroke="#ef4444"
               stroke-width="2"
               stroke-dasharray="4 4"
-              opacity="0.8"
             />
-          {/if}
+          </g>
         {/each}
       </svg>
 
@@ -556,15 +557,19 @@
           tabindex="0"
           onmouseenter={() => (hoveredNodeId = node.id)}
           onmouseleave={() => (hoveredNodeId = null)}
-          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all duration-200 bg-[#0c101b] shadow-sm hover:scale-105 pointer-events-auto cursor-pointer"
-          style="left: {node.x}px; top: {node.y}px; width: {PROVIDER_W}px; height: {PROVIDER_H}px; transform: translate(-50%, -50%); border-color: {node.isActive
+          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all duration-700 ease-out bg-[#0c101b] shadow-sm hover:scale-105 pointer-events-auto cursor-pointer"
+          style="left: {node.x}px; top: {node.y}px; width: {PROVIDER_W}px; height: {PROVIDER_H}px; transform: translate(-50%, -50%); background-color: {node.isActive
+            ? '#0e182b'
+            : node.isLast
+              ? '#14141e'
+              : '#0c101b'}; border-color: {node.isActive
             ? (node.color || '#3b82f6')
             : hoveredNodeId === node.id
               ? '#38bdf8'
               : node.isLast
                 ? '#f59e0b'
                 : '#1e293b'}; box-shadow: {node.isActive
-            ? `0 0 16px ${node.color}40, 0 2px 6px rgba(0,0,0,0.5)`
+            ? `0 0 16px ${node.color}45, 0 2px 6px rgba(0,0,0,0.5)`
             : hoveredNodeId === node.id
               ? '0 0 12px rgba(56,189,248,0.35)'
               : node.isLast
@@ -614,7 +619,7 @@
     <!-- Empty State -->
     {#if displayProviders.length === 0}
       <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-xs text-slate-500">
-        No providers connected or routed in this period.
+        No providers active or routed in the last 3 days.
       </div>
     {/if}
 
