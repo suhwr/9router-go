@@ -311,3 +311,81 @@ func (l *Limiter) connCount() int {
 	defer l.mu.Unlock()
 	return len(l.conns)
 }
+
+func TestPacing_IdleConnectionHasZeroDelay(t *testing.T) {
+	l := New(1, 3)
+	conn := "conn-idle"
+
+	// First request on an idle connection proceeds immediately without wait.
+	wait := l.PacingDelay(conn)
+	if wait != 0 {
+		t.Fatalf("idle connection PacingDelay = %v, want 0", wait)
+	}
+}
+
+func TestPacing_SequentialTurnsAreSpaced(t *testing.T) {
+	l := New(1, 3)
+	l.SetPacing(80*time.Millisecond, 40*time.Millisecond)
+	conn := "conn-seq"
+
+	fakeNow := time.Now()
+	l.now = func() time.Time { return fakeNow }
+
+	// Simulate Turn 1 finishing
+	l.RecordTurnFinished(conn)
+
+	// Turn 2 arrives 5ms later (rapid bot tool call loop)
+	fakeNow = fakeNow.Add(5 * time.Millisecond)
+	wait := l.PacingDelay(conn)
+	if wait < 75*time.Millisecond || wait > 120*time.Millisecond {
+		t.Fatalf("rapid turn PacingDelay = %v, want between 75ms and 120ms", wait)
+	}
+
+	// Turn 2 finishes
+	l.RecordTurnFinished(conn)
+
+	// Turn 3 arrives after 500ms (human pace)
+	fakeNow = fakeNow.Add(500 * time.Millisecond)
+	wait = l.PacingDelay(conn)
+	if wait != 0 {
+		t.Fatalf("human-spaced turn PacingDelay = %v, want 0", wait)
+	}
+}
+
+func TestPacing_ParallelBurstsAreStaggered(t *testing.T) {
+	l := New(3, 3)
+	l.SetPacing(50*time.Millisecond, 0) // deterministic gap for testing
+	conn := "conn-burst"
+
+	fakeNow := time.Now()
+	l.now = func() time.Time { return fakeNow }
+
+	// First parallel request goes immediately
+	w1 := l.PacingDelay(conn)
+	if w1 != 0 {
+		t.Fatalf("first burst slot wait = %v, want 0", w1)
+	}
+
+	// Second parallel request at the exact same instant is staggered by minTurnGap
+	w2 := l.PacingDelay(conn)
+	if w2 != 50*time.Millisecond {
+		t.Fatalf("second burst slot wait = %v, want 50ms", w2)
+	}
+
+	// Third parallel request at the exact same instant is staggered by 2x minTurnGap
+	w3 := l.PacingDelay(conn)
+	if w3 != 100*time.Millisecond {
+		t.Fatalf("third burst slot wait = %v, want 100ms", w3)
+	}
+}
+
+func TestPacing_DisabledWhenZero(t *testing.T) {
+	l := New(1, 3)
+	l.SetPacing(0, 0)
+	conn := "conn-nopacing"
+
+	l.RecordTurnFinished(conn)
+	if wait := l.PacingDelay(conn); wait != 0 {
+		t.Fatalf("disabled pacing wait = %v, want 0", wait)
+	}
+}

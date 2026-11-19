@@ -10,14 +10,15 @@ import (
 	"9router/proxy/internal/proxy"
 )
 
-// admitAntigravity bounds per-connection concurrency and enforces backoff and
-// the circuit breaker before an Antigravity upstream call.
+// admitAntigravity bounds per-connection concurrency and enforces backoff,
+// the circuit breaker, and behavioral anti-burst turn pacing before an Antigravity upstream call.
 //
 // Steps, in order:
 //  1. connlimit.Allow: breaker open → fail fast (zero upstream calls).
 //     Backoff window active → sleep for the computed wait, honouring ctx.
 //  2. connlimit.Acquire: reserve one in-flight slot; at the limit fail fast
 //     with a labelled error (no unbounded queueing).
+//  3. connlimit.PacingDelay: behavioral anti-burst pacing & jitter on sequential turns / bursts.
 //
 // The caller must invoke the returned release exactly once, on every path,
 // including after ForwardGemini returns.
@@ -43,7 +44,7 @@ func admitAntigravity(ctx context.Context, connectionID string) (release func(),
 		}
 	}
 
-	release, err = connlimit.Acquire(ctx, connectionID)
+	semRelease, err := connlimit.Acquire(ctx, connectionID)
 	if err != nil {
 		if errors.Is(err, connlimit.ErrConnLimit) {
 			return nil, &proxy.UpstreamError{
@@ -52,6 +53,24 @@ func admitAntigravity(ctx context.Context, connectionID string) (release func(),
 			}
 		}
 		return nil, err
+	}
+
+	// Behavioral anti-burst pacing & jitter on sequential turns
+	pacingWait := connlimit.PacingDelay(connectionID)
+	if pacingWait > 0 {
+		timer := time.NewTimer(pacingWait)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			semRelease()
+			return nil, ctx.Err()
+		}
+	}
+
+	release = func() {
+		connlimit.RecordTurnFinished(connectionID)
+		semRelease()
 	}
 	return release, nil
 }

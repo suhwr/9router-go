@@ -47,6 +47,14 @@ const (
 	// DefaultMaxBackoff caps the exponential backoff.
 	DefaultMaxBackoff = 1 * time.Minute
 
+	// DefaultMinTurnGap is the baseline minimum inter-turn spacing for sequential
+	// requests on an Antigravity connection (80ms).
+	DefaultMinTurnGap = 80 * time.Millisecond
+
+	// DefaultMaxTurnJitter is the upper bound of randomized jitter added to the
+	// turn gap to break automated clockwork request intervals (80ms).
+	DefaultMaxTurnJitter = 80 * time.Millisecond
+
 	// maxConns bounds the number of tracked connections so the registry cannot
 	// grow without bound on client-supplied IDs.
 	maxConns = 10000
@@ -71,6 +79,8 @@ type connState struct {
 	coolDown          time.Duration // breaker cool-down
 	halfOpenRemaining int           // probes left in half-open state (always 0/1)
 	halfOpenAt        time.Time     // when the single half-open probe was admitted
+	lastTurnFinished  time.Time     // when the most recent in-flight turn completed
+	nextTurnEarliest  time.Time     // earliest instant the next turn slot may fire
 	lastActivity      time.Time
 }
 
@@ -86,6 +96,8 @@ type Limiter struct {
 	maxBackoff       time.Duration
 	coolDown         time.Duration
 	maxConns         int
+	minTurnGap       time.Duration
+	maxTurnJitter    time.Duration
 	now              func() time.Time
 }
 
@@ -106,6 +118,8 @@ func New(concurrency, failureThreshold int) *Limiter {
 		maxBackoff:       DefaultMaxBackoff,
 		coolDown:         DefaultCoolDown,
 		maxConns:         maxConns,
+		minTurnGap:       DefaultMinTurnGap,
+		maxTurnJitter:    DefaultMaxTurnJitter,
 		now:              time.Now,
 	}
 }
@@ -263,6 +277,99 @@ func (l *Limiter) RecordFailure(connID string, status int, body []byte) {
 		s.halfOpenRemaining = 0
 		s.halfOpenAt = time.Time{}
 	}
+}
+
+// PacingDelay returns how long the caller should wait before sending the next
+// upstream request on connID to maintain humanized anti-burst pacing and jitter.
+// If the connection has been idle or pacing is disabled, it returns 0.
+func PacingDelay(connID string) time.Duration {
+	return defaultInstance().PacingDelay(connID)
+}
+
+func (l *Limiter) PacingDelay(connID string) time.Duration {
+	l.mu.Lock()
+	minGap := l.minTurnGap
+	maxJitter := l.maxTurnJitter
+	if minGap <= 0 && maxJitter <= 0 {
+		l.mu.Unlock()
+		return 0
+	}
+	s := l.getOrCreate(connID)
+	l.mu.Unlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := l.now()
+	s.lastActivity = now
+
+	var jitter time.Duration
+	if maxJitter > 0 {
+		jitter = time.Duration(rand.Int64N(int64(maxJitter)))
+	}
+	gap := minGap + jitter
+
+	var wait time.Duration
+	// Check against last turn completion (sequential turn pacing)
+	if !s.lastTurnFinished.IsZero() {
+		earliestAfterPrev := s.lastTurnFinished.Add(gap)
+		if now.Before(earliestAfterPrev) {
+			wait = earliestAfterPrev.Sub(now)
+		}
+	}
+
+	// Check against nextTurnEarliest (parallel burst staggering)
+	if !s.nextTurnEarliest.IsZero() && now.Before(s.nextTurnEarliest) {
+		parallelWait := s.nextTurnEarliest.Sub(now)
+		if parallelWait > wait {
+			wait = parallelWait
+		}
+	}
+
+	slotTime := now.Add(wait)
+	s.nextTurnEarliest = slotTime.Add(gap)
+
+	return wait
+}
+
+// RecordTurnFinished marks the instant an upstream turn on connID completed,
+// setting the baseline for sequential turn pacing on the next request.
+func RecordTurnFinished(connID string) {
+	defaultInstance().RecordTurnFinished(connID)
+}
+
+func (l *Limiter) RecordTurnFinished(connID string) {
+	l.mu.Lock()
+	minGap := l.minTurnGap
+	maxJitter := l.maxTurnJitter
+	s := l.getOrCreate(connID)
+	l.mu.Unlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := l.now()
+	s.lastTurnFinished = now
+	s.lastActivity = now
+
+	if minGap > 0 || maxJitter > 0 {
+		var jitter time.Duration
+		if maxJitter > 0 {
+			jitter = time.Duration(rand.Int64N(int64(maxJitter)))
+		}
+		target := now.Add(minGap + jitter)
+		if target.After(s.nextTurnEarliest) {
+			s.nextTurnEarliest = target
+		}
+	}
+}
+
+// SetPacing configures the minimum inter-turn spacing and randomized jitter.
+// Non-positive values disable pacing.
+func (l *Limiter) SetPacing(minGap, maxJitter time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.minTurnGap = max(minGap, 0)
+	l.maxTurnJitter = max(maxJitter, 0)
 }
 
 // Close drops connID's state, releasing its breaker and backoff. Called on
