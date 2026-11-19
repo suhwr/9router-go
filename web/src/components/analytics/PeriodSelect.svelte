@@ -22,6 +22,8 @@
   import { portal } from '../../lib/ui/portal'
   import {
     PERIODS,
+    HOUR_PERIODS,
+    DAY_PERIODS,
     normalizeCustomPeriod,
     periodLabel,
     type Period,
@@ -149,51 +151,82 @@
       tabindex="-1"
       style={panelStyle}
       onkeydown={onKeydown}
-      class="fixed z-50 rounded-xl border border-border bg-surface p-1.5 shadow-[var(--shadow-elev)]"
+      class="fixed z-50 w-72 rounded-xl border border-border bg-surface p-3 shadow-[var(--shadow-elev)] space-y-3"
     >
-      {#each options as o (o.value)}
-        <button
-          type="button"
-          role="option"
-          aria-selected={value === o.value}
-          onclick={() => select(o.value)}
-          class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs text-text-main transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:text-sm"
-        >
-          <span>{o.label}</span>
-          {#if value === o.value}
-            <span class="material-symbols-outlined text-[16px] text-brand-500" aria-hidden="true">check</span>
-          {/if}
-        </button>
-      {/each}
+      <!-- Group 1: Hours (Barisan Jam) -->
+      <div>
+        <span class="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1.5 px-0.5 font-mono">
+          Hours (Jam)
+        </span>
+        <div class="grid grid-cols-5 gap-1.5">
+          {#each HOUR_PERIODS as o (o.value)}
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === o.value}
+              onclick={() => select(o.value)}
+              class="flex items-center justify-center py-1.5 px-1 rounded-lg text-xs font-mono font-medium transition-all {value === o.value
+                ? 'bg-brand-500 text-white shadow-xs font-bold'
+                : 'bg-surface-2/70 text-text-muted hover:text-text-main hover:bg-surface-2'}"
+              title={o.label}
+            >
+              {o.short}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Group 2: Days & Ranges (Barisan Hari) -->
+      <div>
+        <span class="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1.5 px-0.5 font-mono">
+          Days & Ranges (Hari)
+        </span>
+        <div class="grid grid-cols-3 gap-1.5">
+          {#each DAY_PERIODS as o (o.value)}
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === o.value}
+              onclick={() => select(o.value)}
+              class="flex items-center justify-center py-1.5 px-2 rounded-lg text-xs font-medium transition-all {value === o.value
+                ? 'bg-brand-500 text-white shadow-xs font-bold'
+                : 'bg-surface-2/70 text-text-muted hover:text-text-main hover:bg-surface-2'}"
+              title={o.label}
+            >
+              {o.short}
+            </button>
+          {/each}
+        </div>
+      </div>
 
       {#if showCustom}
-        <div class="mt-1 border-t border-border-subtle px-3 pt-2 pb-1">
-          <label for="custom-period" class="text-[11px] font-medium text-text-muted">Custom window</label>
-          <div class="mt-1.5 flex items-center gap-1.5">
+        <div class="border-t border-border-subtle pt-2.5">
+          <label for="custom-period" class="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1 px-0.5 font-mono">
+            Custom Window
+          </label>
+          <div class="flex items-center gap-1.5">
             <input
               id="custom-period"
               type="text"
-              placeholder="14d"
+              placeholder="e.g. 14d or 12h"
               bind:value={customInput}
               onkeydown={(e) => e.key === 'Enter' && applyCustom()}
               aria-describedby={customError ? 'period-custom-error' : undefined}
               aria-invalid={customError ? 'true' : undefined}
-              class="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-1.5 font-code text-xs text-text-main outline-none transition-colors placeholder:text-text-subtle focus:border-brand-500"
+              class="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2.5 py-1.5 font-code text-xs text-text-main outline-none transition-colors placeholder:text-text-subtle focus:border-brand-500"
             />
             <button
               type="button"
               onclick={applyCustom}
-              class="shrink-0 rounded-lg bg-brand-500 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              class="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover focus:outline-none"
             >
               Set
             </button>
           </div>
           {#if customError}
-            <p id="period-custom-error" class="mt-1.5 text-[11px] text-red-600 dark:text-red-400" role="alert">
+            <p id="period-custom-error" class="mt-1 text-[10px] text-red-500" role="alert">
               {customError}
             </p>
-          {:else}
-            <p class="mt-1.5 text-[11px] text-text-muted">Days or hours, for example 14d or 12h.</p>
           {/if}
         </div>
       {/if}

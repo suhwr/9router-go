@@ -1,7 +1,17 @@
 import { PROVIDER_CATALOG } from '../../lib/providers'
 
 export type MainTab = 'overview' | 'details'
-export type PeriodPreset = 'today' | '24h' | '7d' | '30d' | '60d' | 'all'
+export type PeriodPreset =
+  | '1h'
+  | '3h'
+  | '6h'
+  | '12h'
+  | '24h'
+  | 'today'
+  | '7d'
+  | '30d'
+  | '60d'
+  | 'all'
 // A custom entry is "<n>d" or "<n>h"; the server parses both, so the selector is
 // not limited to the presets below.
 export type Period = PeriodPreset | (string & {})
@@ -149,13 +159,25 @@ export interface StatsData {
   pending?: unknown
 }
 
-export const PERIODS: { value: PeriodPreset; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '60d', label: 'Last 60 days' },
-  { value: 'all', label: 'All time' },
+export const HOUR_PERIODS: { value: PeriodPreset; label: string; short: string }[] = [
+  { value: '1h', label: 'Last 1 hour', short: '1h' },
+  { value: '3h', label: 'Last 3 hours', short: '3h' },
+  { value: '6h', label: 'Last 6 hours', short: '6h' },
+  { value: '12h', label: 'Last 12 hours', short: '12h' },
+  { value: '24h', label: 'Last 24 hours', short: '24h' },
+]
+
+export const DAY_PERIODS: { value: PeriodPreset; label: string; short: string }[] = [
+  { value: 'today', label: 'Today', short: 'Today' },
+  { value: '7d', label: 'Last 7 days', short: '7d' },
+  { value: '30d', label: 'Last 30 days', short: '30d' },
+  { value: '60d', label: 'Last 60 days', short: '60d' },
+  { value: 'all', label: 'All time', short: 'All' },
+]
+
+export const PERIODS: { value: PeriodPreset; label: string; short?: string }[] = [
+  ...HOUR_PERIODS,
+  ...DAY_PERIODS,
 ]
 
 const PERIOD_PATTERN = /^(\d{1,5})([dh])$/

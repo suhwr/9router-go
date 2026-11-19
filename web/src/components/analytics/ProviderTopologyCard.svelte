@@ -31,8 +31,10 @@
     onRefresh
   }: Props = $props()
 
-  // Displayed providers in deterministic order
-  let displayProviders = $derived(providers)
+  // Displayed providers sorted deterministically ONCE so positions NEVER jump or shuffle
+  let displayProviders = $derived(
+    [...providers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
+  )
 
   let activeProviderIds = $derived.by(() => {
     const set = new Set<string>()
@@ -50,7 +52,7 @@
 
   // STAGED CARDIAC RHYTHM:
   // Idle (0 active requests): Very calm, tranquil, slow resting breath (5.5s cycle / ~11 BPM).
-  // Active traffic: Awakens progressively to match throughput without CPU churn.
+  // Active traffic: Speeds up dynamically to match throughput.
   let stageLevel = $derived.by(() => {
     if (activeCount >= 6) return 4
     if (activeCount >= 3) return 3
@@ -86,7 +88,7 @@
   let containerHeight = $state(480)
 
   // Zoom & Pan transforms with hardware acceleration
-  let zoom = $state(0.85)
+  let zoom = $state(0.75)
   let panX = $state(0)
   let panY = $state(0)
   let isDragging = $state(false)
@@ -118,17 +120,44 @@
     return { x: cx + dx * s, y: cy + dy * s }
   }
 
-  // 2-CONCENTRIC RINGS & BRANCHING BUS TOPOLOGY GEOMETRY
-  // Ring 1 (Inner): Frequently used providers (most requests, active, recent).
-  // Ring 2 (Outer): Extended providers branching off from their parent sector trunk.
+  // 100% STABLE DUAL-ORBIT GEOMETRY WITH SMOOTH NON-COLLIDING BRANCHES
+  // Inner Ring: Frequently used providers
+  // Outer Ring: Sits in the angular gaps (sela-sela) between inner nodes!
+  // Lines NEVER cut through inner cards and NEVER have straight lines (all pure Cubic Bézier).
   let geometry = $derived.by(() => {
     const total = displayProviders.length
     if (total === 0) {
-      return { rx1: 240, ry1: 140, rx2: 410, ry2: 240, nodes: [], trunks: [] }
+      return { rx1: 280, ry1: 160, rx2: 500, ry2: 290, nodes: [], trunks: [] }
     }
 
-    // 1. Score each provider by frequency of use
-    const scoredList = displayProviders.map((p) => {
+    // 1. Separate Inner vs Outer using static ranking (historical requests / alphabetical order)
+    // NEVER re-sorted by live active state, so cards stay 100% stationary!
+    let innerCount = total
+    if (total > 4) {
+      innerCount = Math.min(5, Math.max(3, Math.ceil(total * 0.35)))
+    }
+
+    // Pick top inner nodes deterministically by historical requests, then sort by name
+    const sortedByUsageRank = [...displayProviders].sort(
+      (a, b) => (b.requests || 0) - (a.requests || 0) || a.name.localeCompare(b.name)
+    )
+    const innerIdSet = new Set(sortedByUsageRank.slice(0, innerCount).map((p) => p.id))
+
+    const innerNodesRaw = displayProviders.filter((p) => innerIdSet.has(p.id))
+    const outerNodesRaw = displayProviders.filter((p) => !innerIdSet.has(p.id))
+
+    const numInner = innerNodesRaw.length
+    const numOuter = outerNodesRaw.length
+
+    // Radii: generous spacing to eliminate any possibility of overlap
+    const rx1 = Math.max(280, 220 + numInner * 16)
+    const ry1 = Math.max(160, 0.54 * rx1)
+
+    const rx2 = rx1 + 220
+    const ry2 = ry1 + 130
+
+    // Helper to test if a provider is live/recent/error
+    const checkStatus = (p: ProviderNodeItem) => {
       const pid = p.id.toLowerCase().trim()
       const pname = (p.name || '').toLowerCase().trim()
       const palias = (p.alias || '').toLowerCase().trim()
@@ -144,51 +173,16 @@
         (hasPulse && isMatch(pulseProvider))
       const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
       const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
-
-      let score = p.requests || 0
-      if (isActive) score += 10000
-      if (isLast) score += 5000
-      if (isError) score += 1000
-
-      return {
-        ...p,
-        pid,
-        isActive,
-        isLast,
-        isError,
-        score
-      }
-    })
-
-    // 2. Separate into Inner Ring (frequently used) and Outer Ring (secondary)
-    let innerCount = total
-    if (total > 4) {
-      innerCount = Math.min(6, Math.max(3, Math.ceil(total * 0.38)))
+      return { isActive, isLast, isError }
     }
 
-    // Sort by score descending to pick top inner nodes
-    const sortedByUsage = [...scoredList].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-    const innerSet = new Set<string>(sortedByUsage.slice(0, innerCount).map((p) => p.id))
-
-    // Sort inner and outer deterministically by name so positions stay rock-solid
-    const innerNodesRaw = scoredList.filter((p) => innerSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
-    const outerNodesRaw = scoredList.filter((p) => !innerSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
-
-    const numInner = innerNodesRaw.length
-    const rx1 = Math.max(240, 180 + numInner * 16)
-    const ry1 = Math.max(140, 0.54 * rx1)
-
-    const rx2 = rx1 + 175
-    const ry2 = ry1 + 105
-
-    // 3. Position Inner Nodes on Ring 1
+    // 2. Position Inner Nodes on Ring 1
     const sectorTrunks: {
       id: string
       sectorIndex: number
       innerNodeId: string
-      angle: number
       trunkPath: string
-      junction: { x: number; y: number }
+      forkPoint: { x: number; y: number }
       isActive: boolean
     }[] = []
 
@@ -197,103 +191,123 @@
       const x = rx1 * Math.cos(angle)
       const y = ry1 * Math.sin(angle)
 
+      const status = checkStatus(p)
+
+      // Gateway exit port
       const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
+      // Inner node entry port
       const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, 0, 0)
 
-      // Branching Junction Point J placed at 62% of distance along the sector ray
-      const jx = source.x * 0.38 + target.x * 0.62
-      const jy = source.y * 0.38 + target.y * 0.62
+      // Fork Point F placed at 55% between Gateway and Inner Node
+      const fx = source.x * 0.45 + target.x * 0.55
+      const fy = source.y * 0.45 + target.y * 0.55
 
-      // Main Trunk Path from Gateway to Junction J
-      const dx = jx - source.x
-      const dy = jy - source.y
+      // Smooth Trunk Bézier from Gateway to Fork Point F
+      const dx = fx - source.x
+      const dy = fy - source.y
       const dist = Math.hypot(dx, dy) || 1
-      const isHorizontal = Math.abs(source.x) >= ROUTER_W / 2 - 1.5
-      const lDirX = isHorizontal ? Math.sign(source.x) : 0
-      const lDirY = isHorizontal ? 0 : Math.sign(source.y)
-      const span = Math.min(60, dist * 0.45)
-      const cp1x = source.x + (lDirX * 0.75 + (dx / dist) * 0.25) * span
-      const cp1y = source.y + (lDirY * 0.75 + (dy / dist) * 0.25) * span
-      const cp2x = jx - (dx / dist) * span * 0.5
-      const cp2y = jy - (dy / dist) * span * 0.5
+      const isHoriz = Math.abs(source.x) >= ROUTER_W / 2 - 1.5
+      const lDirX = isHoriz ? Math.sign(source.x) : 0
+      const lDirY = isHoriz ? 0 : Math.sign(source.y)
+      const span = Math.min(50, dist * 0.4)
 
-      const trunkPath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${jx.toFixed(1)} ${jy.toFixed(1)}`
+      const tcp1x = source.x + (lDirX * 0.7 + (dx / dist) * 0.3) * span
+      const tcp1y = source.y + (lDirY * 0.7 + (dy / dist) * 0.3) * span
+      const tcp2x = fx - (dx / dist) * span * 0.6
+      const tcp2y = fy - (dy / dist) * span * 0.6
 
-      // Short branch from Junction J into Inner Node
-      const branchToInner = `M ${jx.toFixed(1)} ${jy.toFixed(1)} L ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const fullCurvePath = `${trunkPath} L ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} C ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
+      const trunkPath = `M ${source.x.toFixed(1)} ${source.y.toFixed(1)} C ${tcp1x.toFixed(1)} ${tcp1y.toFixed(1)}, ${tcp2x.toFixed(1)} ${tcp2y.toFixed(1)}, ${fx.toFixed(1)} ${fy.toFixed(1)}`
+
+      // Smooth Branch A from Fork Point F into Inner Node (NO straight L lines! Pure Cubic Bézier)
+      const bdx = target.x - fx
+      const bdy = target.y - fy
+      const bdist = Math.hypot(bdx, bdy) || 1
+      const bSpan = Math.min(45, bdist * 0.4)
+      const fcp1x = fx + (dx / dist) * bSpan
+      const fcp1y = fy + (dy / dist) * bSpan
+      const fcp2x = target.x - (bdx / bdist) * bSpan * 0.6
+      const fcp2y = target.y - (bdy / bdist) * bSpan * 0.6
+
+      const innerBranchSegment = `C ${fcp1x.toFixed(1)} ${fcp1y.toFixed(1)}, ${fcp2x.toFixed(1)} ${fcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const fullCurvePath = `${trunkPath} ${innerBranchSegment}`
+      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${fcp2x.toFixed(1)} ${fcp2y.toFixed(1)}, ${fcp1x.toFixed(1)} ${fcp1y.toFixed(1)}, ${fx.toFixed(1)} ${fy.toFixed(1)} C ${tcp2x.toFixed(1)} ${tcp2y.toFixed(1)}, ${tcp1x.toFixed(1)} ${tcp1y.toFixed(1)}, ${source.x.toFixed(1)} ${source.y.toFixed(1)}`
 
       sectorTrunks.push({
         id: `trunk-${p.id}`,
         sectorIndex: idx,
         innerNodeId: p.id,
-        angle,
         trunkPath,
-        junction: { x: jx, y: jy },
-        isActive: p.isActive
+        forkPoint: { x: fx, y: fy },
+        isActive: status.isActive
       })
 
       return {
         ...p,
+        ...status,
         ring: 'inner' as const,
         sectorIndex: idx,
         x,
         y,
         curvePath: fullCurvePath,
-        branchPath: branchToInner,
+        branchPath: `M ${fx.toFixed(1)} ${fy.toFixed(1)} ${innerBranchSegment}`,
         returnPath,
         textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
         color: p.color || '#38bdf8'
       }
     })
 
-    // 4. Position Outer Nodes on Ring 2 (Branching from sector trunks)
-    const numOuter = outerNodesRaw.length
+    // 3. Position Outer Nodes in the ANGULAR GAPS (SELA-SELA) Between Inner Nodes!
+    // This mathematically guarantees lines pass through open spaces and NEVER cross through an inner card.
     const outerCalculated = outerNodesRaw.map((p, idx) => {
-      // Assign outer node to an inner sector
       const sectorIndex = idx % numInner
       const parentTrunk = sectorTrunks[sectorIndex]
-      const siblingsInSector = outerNodesRaw.filter((_, oIdx) => oIdx % numInner === sectorIndex)
-      const siblingPos = siblingsInSector.findIndex((s) => s.id === p.id)
-      const totalSiblings = siblingsInSector.length
+      const status = checkStatus(p)
 
-      // Fan-out angle around parent sector angle
-      const spread = Math.min(0.38, Math.PI / (numInner * (totalSiblings + 1)))
-      const angle = parentTrunk.angle + (siblingPos - (totalSiblings - 1) / 2) * spread
+      // Base gap angle is exactly halfway between inner node sectorIndex and (sectorIndex + 1)
+      const baseGapAngle = -Math.PI / 2 + (2 * Math.PI * sectorIndex) / numInner + Math.PI / numInner
+
+      // If multiple outer nodes share the same gap, fan them out slightly inside the gap
+      const siblingsInGap = outerNodesRaw.filter((_, oIdx) => oIdx % numInner === sectorIndex)
+      const sibIdx = siblingsInGap.findIndex((s) => s.id === p.id)
+      const sibCount = siblingsInGap.length
+      const spread = Math.min(0.26, (0.75 * Math.PI) / (numInner * Math.max(2, sibCount)))
+      const angle = baseGapAngle + (sibIdx - (sibCount - 1) / 2) * spread
 
       const x = rx2 * Math.cos(angle)
       const y = ry2 * Math.sin(angle)
 
-      const j = parentTrunk.junction
-      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, j.x, j.y)
+      const f = parentTrunk.forkPoint
+      const target = getRectBorderPoint(x, y, PROVIDER_W, PROVIDER_H, f.x, f.y)
 
-      // Outer Branch Path from Junction J to Outer Node
-      const bdx = target.x - j.x
-      const bdy = target.y - j.y
+      // Smooth Branch B from Fork Point F curving through the corridor (sela-sela) into Outer Node
+      const bdx = target.x - f.x
+      const bdy = target.y - f.y
       const bdist = Math.hypot(bdx, bdy) || 1
-      const bSpan = Math.min(85, bdist * 0.4)
-      const bcp1x = j.x + (bdx / bdist) * bSpan
-      const bcp1y = j.y + (bdy / bdist) * bSpan
-      const bcp2x = target.x - (bdx / bdist) * bSpan * 0.8
-      const bcp2y = target.y - (bdy / bdist) * bSpan * 0.8
+      const bSpan = Math.min(90, bdist * 0.42)
 
-      const branchPath = `M ${j.x.toFixed(1)} ${j.y.toFixed(1)} C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const fullCurvePath = `${parentTrunk.trunkPath} C ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
-      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${bcp2x.toFixed(1)} ${bcp2y.toFixed(1)}, ${bcp1x.toFixed(1)} ${bcp1y.toFixed(1)}, ${j.x.toFixed(1)} ${j.y.toFixed(1)}`
+      // Departure from F follows the trunk forward momentum then sweeps towards outer target
+      const fcp1x = f.x + (bdx / bdist) * bSpan
+      const fcp1y = f.y + (bdy / bdist) * bSpan
+      const fcp2x = target.x - (bdx / bdist) * bSpan * 0.75
+      const fcp2y = target.y - (bdy / bdist) * bSpan * 0.75
 
-      if (p.isActive) {
+      const outerBranchSegment = `C ${fcp1x.toFixed(1)} ${fcp1y.toFixed(1)}, ${fcp2x.toFixed(1)} ${fcp2y.toFixed(1)}, ${target.x.toFixed(1)} ${target.y.toFixed(1)}`
+      const fullCurvePath = `${parentTrunk.trunkPath} ${outerBranchSegment}`
+      const returnPath = `M ${target.x.toFixed(1)} ${target.y.toFixed(1)} C ${fcp2x.toFixed(1)} ${fcp2y.toFixed(1)}, ${fcp1x.toFixed(1)} ${fcp1y.toFixed(1)}, ${f.x.toFixed(1)} ${f.y.toFixed(1)}`
+
+      if (status.isActive) {
         parentTrunk.isActive = true
       }
 
       return {
         ...p,
+        ...status,
         ring: 'outer' as const,
         sectorIndex,
         x,
         y,
         curvePath: fullCurvePath,
-        branchPath,
+        branchPath: `M ${f.x.toFixed(1)} ${f.y.toFixed(1)} ${outerBranchSegment}`,
         returnPath,
         textIcon: (p.name || p.id || '?').slice(0, 2).toUpperCase(),
         color: p.color || '#94a3b8'
@@ -316,7 +330,7 @@
     const requiredHeight = 2 * geometry.ry2 + 160
     const scaleX = (containerWidth - 36) / requiredWidth
     const scaleY = (containerHeight - 36) / requiredHeight
-    zoom = Math.min(1.0, Math.max(0.18, Math.min(scaleX, scaleY)))
+    zoom = Math.min(0.95, Math.max(0.18, Math.min(scaleX, scaleY)))
     panX = 0
     panY = 0
   }
@@ -385,7 +399,7 @@
       </div>
       <div class="min-w-0">
         <h2 class="text-xs font-bold text-slate-100 tracking-wider uppercase font-mono">Routing Topology</h2>
-        <p class="text-[11px] text-slate-400 truncate">Dual-orbit branched gateway bus</p>
+        <p class="text-[11px] text-slate-400 truncate">Dual-orbit branched corridor network</p>
       </div>
     </div>
 
@@ -483,7 +497,7 @@
       class="absolute inset-0 pointer-events-none"
       style="transform: translate3d({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px, 0) scale3d({zoom}, {zoom}, 1); transform-origin: 0 0; will-change: transform;"
     >
-      <!-- SVG Vector Layer for 2 Rings, Trunks, Branches & Active Streams -->
+      <!-- SVG Vector Layer for 2 Rings, Trunks, Non-Colliding Branches & Streams -->
       <svg class="absolute inset-0 overflow-visible pointer-events-none">
         <defs>
           {#each geometry.nodes as node (node.id)}
@@ -509,7 +523,7 @@
           opacity="0.22"
         />
 
-        <!-- Ring 2: Outer Orbit (Extended Branched Providers) -->
+        <!-- Ring 2: Outer Orbit (Extended Branched Corridor) -->
         {#if geometry.rx2 > geometry.rx1}
           <ellipse
             cx="0"
@@ -524,8 +538,8 @@
           />
         {/if}
 
-        <!-- 1. Ambient Branched Bus Lines -->
-        <!-- Sector Trunks from Gateway to Junction Points J -->
+        <!-- 1. Ambient Branched Bus Lines (Smooth Béziers, NO straight lines) -->
+        <!-- Sector Trunks from Gateway to Fork Points F -->
         {#each geometry.trunks as trunk (trunk.id)}
           <path
             d={trunk.trunkPath}
@@ -536,10 +550,10 @@
             opacity={trunk.isActive ? '0.85' : '0.4'}
             class="transition-all duration-300"
           />
-          <!-- Glowing Junction Node J -->
+          <!-- Glowing Fork Junction Dot F -->
           <circle
-            cx={trunk.junction.x}
-            cy={trunk.junction.y}
+            cx={trunk.forkPoint.x}
+            cy={trunk.forkPoint.y}
             r={trunk.isActive ? '3.5' : '2.5'}
             fill={trunk.isActive ? '#38bdf8' : '#1e293b'}
             stroke={trunk.isActive ? '#38bdf8' : '#334155'}
@@ -548,7 +562,7 @@
           />
         {/each}
 
-        <!-- Branch Lines to Nodes -->
+        <!-- Non-Colliding Branch Lines to Nodes through open corridors (sela-sela) -->
         {#each geometry.nodes as node (node.id)}
           <path
             d={node.branchPath}
@@ -678,7 +692,7 @@
         {/if}
       </div>
 
-      <!-- Provider Nodes (High-performance solid glass without expensive backdrop-filter lag) -->
+      <!-- Provider Nodes (100% Stable Stationary Position, High-performance solid glass) -->
       {#each geometry.nodes as node (node.id)}
         <div
           role="button"
@@ -748,7 +762,7 @@
     <!-- Empty State -->
     {#if displayProviders.length === 0}
       <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-xs text-slate-500">
-        No providers connected or routed in this period.
+        No providers connected or routed across all history.
       </div>
     {/if}
 
@@ -761,7 +775,7 @@
         </span>
         <span class="flex items-center gap-1.5">
           <span class="size-2 rounded-full bg-slate-500"></span>
-          <span>Outer Orbit (Branched)</span>
+          <span>Outer Orbit (Sela-sela Corridor)</span>
         </span>
         {#if activeCount > 0}
           <span class="flex items-center gap-1.5">

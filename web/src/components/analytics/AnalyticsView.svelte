@@ -491,32 +491,28 @@
       if (r.provider) addProvider(r.provider, 'recent')
     }
 
-    // 3. Add user-configured connections, but only the ones that actually
-    //    carried traffic in the selected window. Every non-inactive row used
-    //    to be drawn here, and since that list is not usage-windowed the node
-    //    outlived both the period and the connection itself: a provider the
-    //    operator had merely configured sat on the map indefinitely as if it
-    //    were serving (#280). Gating it on the same window as every other
-    //    source is what makes the map mean what it claims to mean.
+    // 3. Add all user-configured connections
     for (const c of connections) {
-      if (c.isActive !== 0 && c.provider && usedInPeriod(c.provider)) {
+      if (c.provider) {
         addProvider(c.provider, 'connection', c.name || undefined)
       }
     }
 
-    // 4. Add historical providers with usage
+    // 4. Add all custom provider nodes
+    for (const n of providerNodes || []) {
+      if (n?.id) {
+        addProvider(n.id, 'custom', n.name)
+      }
+    }
+
+    // 5. Add historical providers with usage across time
     if (stats.byProvider) {
       for (const prov of Object.keys(stats.byProvider)) {
         addProvider(prov, 'stats')
       }
     }
 
-    // 5. Free/no-auth defaults, but only once they have actually been used.
-    //    Upstream #4615: no-auth providers store no connection, so the old
-    //    unconditional pass drew every catalog free provider on a map that
-    //    reads as "who is on the bus" — including ones never routed a request.
-    //    Providers with real usage already entered above via stats.byProvider,
-    //    so this only has to cover the ids whose usage key the map lacks.
+    // 6. Free/no-auth defaults if used
     const FREE_DEFAULTS = ['antigravity', 'opencode', 'nvidia', 'openrouter', 'clinepass']
     for (const f of FREE_DEFAULTS) {
       if (usedInPeriod(f)) addProvider(f, 'default')
