@@ -13,6 +13,7 @@
     resolveFilteredGroups,
     resolveModelPickerGroups,
   } from './pickerData'
+  import { getComboModels, hasVision, hasReasoning } from './types'
   import { EMPTY_PICKER_EXTRAS, loadPickerExtras, type ResolvedPickerExtras } from './pickerExtras'
   import { emailPrivacy, formatEmailLabel } from '../../lib/privacy'
   import { parseSearchQuery } from '../../lib/modelSearchFilter'
@@ -106,6 +107,16 @@
 
   function clearSearch() {
     searchQuery = ''
+  }
+
+  function comboHasVision(c: Combo): boolean {
+    const list = getComboModels(c)
+    return list.some((m) => hasVision(m))
+  }
+
+  function comboHasReasoning(c: Combo): boolean {
+    const list = getComboModels(c)
+    return list.some((m) => hasReasoning(m))
   }
 </script>
 
@@ -214,6 +225,8 @@
                   label={combo.name}
                   value={combo.name}
                   isAdded={addedModelValues.includes(combo.name)}
+                  vision={comboHasVision(combo)}
+                  reasoning={comboHasReasoning(combo)}
                   onToggle={handleToggle}
                 />
               {/each}

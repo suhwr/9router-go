@@ -148,6 +148,46 @@ export function splitTag(line: string): { tag: string; message: string } | null 
   return match ? { tag: match[1], message: match[2] } : null
 }
 
+export interface ComboLogDetails {
+  combo?: string
+  model?: string
+  index?: string // e.g. "1/3"
+  provider?: string
+  conn?: string
+  ms?: string
+  action?: string
+  rawRemainder?: string
+}
+
+/**
+ * Extracts structured combo routing info (combo name, model, index, latency, provider)
+ * from a log message.
+ */
+export function parseComboLog(message: string): ComboLogDetails | null {
+  if (!message || !message.includes('combo')) return null
+
+  const comboMatch = message.match(/\bcombo=([^\s]+)/)
+  if (!comboMatch) return null
+
+  const modelMatch = message.match(/\bmodel=([^\s]+)/)
+  const indexMatch = message.match(/\bindex=([^\s]+)/)
+  const providerMatch = message.match(/\bprovider=([^\s]+)/)
+  const connMatch = message.match(/\bconn=([^\s]+)/)
+  const msMatch = message.match(/\bms=([^\s]+)/)
+
+  const actionMatch = message.split(/\s\w+=/)[0]?.trim()
+
+  return {
+    combo: comboMatch[1],
+    model: modelMatch?.[1],
+    index: indexMatch?.[1],
+    provider: providerMatch?.[1],
+    conn: connMatch?.[1],
+    ms: msMatch?.[1],
+    action: actionMatch,
+  }
+}
+
 
 /** Export text, one row per line, timestamped like the on-screen gutter. */
 export function toPlainText(entries: ConsoleEntry[]): string {

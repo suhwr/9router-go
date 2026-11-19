@@ -10,6 +10,7 @@
     downloadFilename,
     filterEntries,
     formatClock,
+    parseComboLog,
     splitTag,
     toPlainText,
     type ConsoleEntry,
@@ -223,12 +224,45 @@
         {#each visible as entry (entry.seq)}
           {@const meta = LEVEL_META[entry.level]}
           {@const parts = splitTag(entry.line)}
-          <div class="flex items-baseline gap-3 px-3 py-1 hover:bg-surface-3/40">
-            <time class="shrink-0 tabular-nums text-[11px] text-text-muted">{formatClock(entry.time)}</time>
-            <span class="w-8 shrink-0 text-[11px] font-bold {meta.text}">{meta.label}</span>
-            <span class="min-w-0 flex-1 {wrap ? 'break-words' : 'whitespace-pre'} {meta.text}">
-              {#if parts}<span class="opacity-70">{parts.tag}</span>{' '}{:else}{/if}{parts?.message ?? entry.line}
-            </span>
+          {@const comboInfo = parts ? parseComboLog(parts.message) : null}
+          <div class="flex items-baseline gap-2.5 px-3 py-1.5 hover:bg-surface-3/40 transition-colors border-l-2 {entry.level === 'error' ? 'border-red-500' : entry.level === 'warn' ? 'border-amber-500' : comboInfo ? 'border-brand-500/60' : 'border-transparent'}">
+            <time class="shrink-0 tabular-nums text-[11px] text-text-muted font-mono">{formatClock(entry.time)}</time>
+            <span class="w-7 shrink-0 text-[10px] font-bold tracking-wider {meta.text}">{meta.label}</span>
+            <div class="min-w-0 flex-1 {wrap ? 'break-words' : 'whitespace-pre'} {meta.text}">
+              {#if comboInfo}
+                <div class="flex flex-wrap items-center gap-1.5 font-sans">
+                  <span class="inline-flex items-center gap-1 rounded bg-brand-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-brand-600 dark:text-brand-400 border border-brand-500/25">
+                    <span class="material-symbols-outlined text-[13px]">hub</span>
+                    {comboInfo.combo}
+                  </span>
+                  {#if comboInfo.index}
+                    <span class="inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                      #{comboInfo.index}
+                    </span>
+                  {/if}
+                  {#if comboInfo.model}
+                    <span class="inline-flex items-center rounded bg-surface-3 px-1.5 py-0.5 text-[11px] font-mono text-text-main border border-border">
+                      {comboInfo.model}
+                    </span>
+                  {/if}
+                  {#if comboInfo.provider}
+                    <span class="text-[10px] text-text-muted">
+                      ({comboInfo.provider}{comboInfo.conn ? ` · ${comboInfo.conn}` : ''})
+                    </span>
+                  {/if}
+                  {#if comboInfo.ms}
+                    <span class="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                      {comboInfo.ms}ms
+                    </span>
+                  {/if}
+                  {#if comboInfo.action}
+                    <span class="text-[11px] opacity-75">{comboInfo.action}</span>
+                  {/if}
+                </div>
+              {:else}
+                {#if parts}<span class="opacity-70 font-mono">[{parts.tag}]</span>{' '}{:else}{/if}<span class="font-mono text-xs">{parts?.message ?? entry.line}</span>
+              {/if}
+            </div>
           </div>
         {/each}
       </div>

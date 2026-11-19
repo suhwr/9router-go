@@ -143,21 +143,70 @@ export interface CapacityAdapterState {
 
 
 export function hasVision(model: string): boolean {
+  if (!model) return false
   const m = model.toLowerCase()
+  if (
+    m.includes('stable-image') ||
+    m.includes('nanobanana') ||
+    m.includes('flux') ||
+    m.includes('dall') ||
+    m.includes('sdxl') ||
+    m.includes('diffusion') ||
+    m.includes('embed') ||
+    m.includes('rerank') ||
+    m.includes('tts') ||
+    m.includes('stt') ||
+    m.includes('whisper')
+  ) {
+    return false
+  }
   return (
     m.includes('vision') ||
+    m.includes('vl') ||
+    m.includes('vlm') ||
     m.includes('gemini') ||
+    m.includes('gemma') ||
     m.includes('claude-3') ||
     m.includes('claude-sonnet') ||
     m.includes('claude-opus') ||
+    m.includes('claude-haiku') ||
+    m.includes('haiku-4') ||
     m.includes('gpt-4o') ||
+    m.includes('gpt-4-turbo') ||
+    m.includes('gpt-4.1') ||
+    m.includes('gpt-5') ||
+    m.includes('gpt-6') ||
+    m.includes('pixtral') ||
     m.includes('spark') ||
-    m.includes('vl') ||
-    m.includes('flash')
+    m.includes('flash') ||
+    m.includes('omni') ||
+    m.includes('multimodal') ||
+    m.includes('visual') ||
+    m.includes('qwen-vl') ||
+    m.includes('qwenvl') ||
+    m.includes('qwen3.5') ||
+    m.includes('qwen3.7') ||
+    m.includes('qwen3.8') ||
+    m.includes('grok') ||
+    m.includes('llama-3.2') ||
+    m.includes('llama-4') ||
+    m.includes('fable') ||
+    m.includes('kimi-k2') ||
+    m.includes('kimi-k3') ||
+    m.includes('minimax-m2.7') ||
+    m.includes('minimax-m3') ||
+    m.includes('mimo-v2.5') ||
+    m.includes('mimo-v2.6') ||
+    m.includes('mimo-omni') ||
+    m.includes('glm-4v') ||
+    m.includes('internvl') ||
+    m.includes('step-1v') ||
+    m.includes('doubao-vision')
   )
 }
 
 export function hasReasoning(model: string): boolean {
+  if (!model) return false
   const m = model.toLowerCase()
   return (
     m.includes('reason') ||
@@ -166,9 +215,20 @@ export function hasReasoning(model: string): boolean {
     m.includes('deepseek') ||
     m.includes('spark') ||
     m.includes('high') ||
+    m.includes('medium') ||
+    m.includes('low') ||
+    m.includes('tiered') ||
     m.includes('o1') ||
     m.includes('o3') ||
-    m.includes('pro-agent')
+    m.includes('o4') ||
+    m.includes('qwq') ||
+    m.includes('qvq') ||
+    m.includes('claude-3-7') ||
+    m.includes('claude-3.7') ||
+    m.includes('pro-agent') ||
+    m.includes('kaguya') ||
+    m.includes('skywork-o1') ||
+    m.includes('marco-o1')
   )
 }
 

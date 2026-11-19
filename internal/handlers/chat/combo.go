@@ -1189,6 +1189,13 @@ func (h *ChatHandler) handleComboFallbackWithVisited(ctx context.Context, cw *co
 					targetWriter = streamPeeker
 				}
 				attemptStart := time.Now()
+				log.Info("combo", "executing candidate",
+					"combo", comboName,
+					"model", modelInfo.Model,
+					"index", fmt.Sprintf("%d/%d", i+1, len(models)),
+					"provider", modelInfo.Provider,
+					"conn", connObjName(picked),
+				)
 				if modelInfo.Provider == "mimo-free" {
 					comboMetrics := &streamMetrics{}
 					upstreamJSON = clampMimoFreeReasoning(upstreamJSON, modelInfo.Model)
@@ -1359,6 +1366,14 @@ func (h *ChatHandler) handleComboFallbackWithVisited(ctx context.Context, cw *co
 					continue
 				}
 
+				log.Info("combo", "completed turn",
+					"combo", comboName,
+					"model", modelInfo.Model,
+					"index", fmt.Sprintf("%d/%d", i+1, len(models)),
+					"provider", modelInfo.Provider,
+					"conn", connObjName(picked),
+					"ms", time.Since(attemptStart).Milliseconds(),
+				)
 				entrySuccess = true
 				break
 			}
@@ -1690,6 +1705,13 @@ func (h *ChatHandler) handleMessagesComboFallbackWithVisited(ctx context.Context
 				translateResp := !upstreamClaude && !translator.IsResponsesClient(ctx)
 
 				attemptStart := time.Now()
+				log.Info("combo", "executing candidate",
+					"combo", comboName,
+					"model", modelInfo.Model,
+					"index", fmt.Sprintf("%d/%d", i+1, len(models)),
+					"provider", modelInfo.Provider,
+					"conn", connObjName(picked),
+				)
 				fwdErr := h.tryForwardWithConnection(forwardRequestParams{
 					Ctx: fwdCtx, W: targetWriter, Provider: modelInfo.Provider, Model: modelInfo.Model,
 					RequestedModel: comboName, ComboName: comboName, Attempts: attemptCount(ctx),
@@ -1845,6 +1867,14 @@ func (h *ChatHandler) handleMessagesComboFallbackWithVisited(ctx context.Context
 					continue
 				}
 
+				log.Info("combo", "completed turn",
+					"combo", comboName,
+					"model", modelInfo.Model,
+					"index", fmt.Sprintf("%d/%d", i+1, len(models)),
+					"provider", modelInfo.Provider,
+					"conn", connObjName(picked),
+					"ms", time.Since(attemptStart).Milliseconds(),
+				)
 				entrySuccess = true
 				break
 			}

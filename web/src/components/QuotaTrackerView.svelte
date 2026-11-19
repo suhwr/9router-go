@@ -1120,7 +1120,7 @@
         <button
           type="button"
           onclick={() => (providerMenuOpen = !providerMenuOpen)}
-          class="flex h-11 sm:h-8 items-center justify-between gap-1 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main transition-colors hover:bg-surface-3"
+          class="flex h-8 items-center justify-between gap-1 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main transition-colors hover:bg-surface-3 cursor-pointer"
           aria-haspopup="menu"
           aria-expanded={providerMenuOpen}
           title="Filter quota providers"
@@ -1132,7 +1132,7 @@
               <img
                 src={getIconPath(providerFilter)}
                 alt={providerFilter}
-                class="size-[18px] rounded object-contain"
+                class="size-[16px] rounded object-contain"
                 onerror={(e) => {
                   ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                 }}
@@ -1201,7 +1201,7 @@
       <select
         bind:value={accountFilter}
         onchange={handleAccountFilterChange}
-        class="h-11 sm:h-8 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main outline-none transition-colors hover:bg-surface-3"
+        class="h-8 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main outline-none transition-colors hover:bg-surface-3 cursor-pointer"
         aria-label="Filter accounts by status"
       >
         {#each ACCOUNT_FILTER_OPTIONS as option (option.value)}
@@ -1213,7 +1213,7 @@
       {#if providerFilter === 'codex'}
         <select
           bind:value={quotaSortMode}
-          class="h-11 sm:h-8 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main outline-none transition-colors hover:bg-surface-3"
+          class="h-8 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main outline-none transition-colors hover:bg-surface-3 cursor-pointer"
           aria-label="Sort Codex quotas by remaining"
         >
           {#each QUOTA_SORT_OPTIONS as option (option.value)}
@@ -1358,18 +1358,18 @@
             : 'opacity-65 bg-surface/50'}"
         >
           <!-- Card header: Mobile responsive layout -->
-          <div class="border-b border-border-subtle/80 bg-surface-2/30 px-3.5 py-2.5">
-            <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div class="border-b border-border-subtle/80 bg-surface-2/30 px-3 py-2">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <!-- Identity Left -->
-              <div class="flex min-w-0 items-center justify-between gap-2.5">
-                <div class="flex min-w-0 items-center gap-2.5">
+              <div class="flex min-w-0 items-center justify-between gap-2">
+                <div class="flex min-w-0 items-center gap-2">
                   <div
-                    class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 border border-border-subtle/50 p-1"
+                    class="flex size-7 sm:size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-2 border border-border-subtle/50 p-0.5"
                   >
                     <img
                       src={getIconPath(conn.provider)}
                       alt={conn.provider}
-                      class="size-7 object-contain"
+                      class="size-6 object-contain"
                       onerror={(e) => {
                         ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                       }}
@@ -1377,7 +1377,7 @@
                   </div>
                   <div class="min-w-0">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                      <h3 class="truncate text-sm font-semibold text-text-main">
+                      <h3 class="truncate text-xs sm:text-sm font-semibold text-text-main">
                         {providerLabel(conn.provider)}
                       </h3>
                       <span
@@ -1444,7 +1444,7 @@
               </div>
 
               <!-- Action buttons row -->
-              <div class="flex shrink-0 items-center justify-end gap-1.5 pt-1.5 sm:pt-0 border-t border-border-subtle/40 sm:border-0 flex-wrap">
+              <div class="flex shrink-0 items-center justify-end gap-1 pt-1 sm:pt-0 border-t border-border-subtle/40 sm:border-0 flex-wrap">
                 {#if conn.provider === 'codex' || conn.provider === 'claude'}
                   {@const resetCreditCount = getCodexResetCreditCount(quota)}
                   <button
@@ -1455,9 +1455,9 @@
                     title={resetCreditCount > 0
                       ? `Redeem a ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credit (${resetCreditCount} available)`
                       : `Check ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credits`}
-                    class="flex h-8 min-w-9 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-7 min-w-8 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
-                    <span class="material-symbols-outlined text-[15px]">restart_alt</span>
+                    <span class="material-symbols-outlined text-[14px]">restart_alt</span>
                     <span>{resetCreditCount}</span>
                   </button>
                 {/if}
@@ -1473,9 +1473,9 @@
                     title={resetCardCount > 0
                       ? `Redeem a GLM reset card (${resetCardCount} available)`
                       : 'Check GLM reset cards'}
-                    class="flex h-8 min-w-9 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-7 min-w-8 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
-                    <span class="material-symbols-outlined text-[15px]">restart_alt</span>
+                    <span class="material-symbols-outlined text-[14px]">restart_alt</span>
                     <span>{resetCardCount}</span>
                   </button>
                 {/if}
@@ -1494,20 +1494,20 @@
                     onclick={() => toggleAutoPing(conn.id, conn.provider, !isAutoPingActive)}
                     title={AUTO_PING_TOOLTIPS[conn.provider]}
                     aria-label="Toggle auto-ping"
-                    class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-text-main'}"
+                    class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[17px]">bolt</span>
+                    <span class="material-symbols-outlined text-[15px]">bolt</span>
                   </button>
                   <button
                     type="button"
                     onclick={() => (autoPingEditing = conn)}
                     title="Auto-ping schedule"
                     aria-label="Configure auto-ping schedule"
-                    class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
+                    class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
                       ? 'text-primary bg-primary/10'
                       : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[17px]">schedule</span>
+                    <span class="material-symbols-outlined text-[15px]">schedule</span>
                   </button>
                 {/if}
 
@@ -1518,10 +1518,10 @@
                   disabled={isLoading || rowBusy}
                   aria-label="Refresh quota"
                   title="Refresh quota"
-                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[17px] {isLoading
+                    class="material-symbols-outlined text-[15px] {isLoading
                       ? 'animate-spin'
                       : ''}">refresh</span
                   >
@@ -1534,9 +1534,9 @@
                   disabled={rowBusy}
                   aria-label="Edit connection"
                   title="Edit connection"
-                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
                 >
-                  <span class="material-symbols-outlined text-[17px]">edit</span>
+                  <span class="material-symbols-outlined text-[15px]">edit</span>
                 </button>
 
                 <!-- Delete connection -->
@@ -1546,10 +1546,10 @@
                   disabled={rowBusy}
                   aria-label="Delete connection"
                   title="Delete connection"
-                  class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[17px] {deletingId === conn.id
+                    class="material-symbols-outlined text-[15px] {deletingId === conn.id
                       ? 'animate-pulse'
                       : ''}">delete</span
                   >

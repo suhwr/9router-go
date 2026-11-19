@@ -28,7 +28,7 @@
     oauthLoopbackCallbackURL,
     writeCallback,
   } from '../../lib/oauth-handoff'
-  import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from '../../lib/models'
+  import { getModelsByProviderId, getModelCaps, PROVIDER_ID_TO_ALIAS } from '../../lib/models'
   import { copyToClipboard } from '../../lib/clipboard'
   import { parseModelIds } from '../../lib/bulk-models'
   import { inferModelKind, customModelKeyFor } from '../../lib/modelKindInference'
@@ -90,7 +90,7 @@
   import type { ProviderNodeLimitsPatch } from '../../api/client'
   import Badge from '../../lib/ui/Badge.svelte'
   import Toggle from '../../lib/ui/Toggle.svelte'
-  import { PauseCircle } from 'lucide-svelte'
+  import { PauseCircle, Eye, Brain } from 'lucide-svelte'
   import ProviderHeaderOverridesModal from './ProviderHeaderOverridesModal.svelte'
   import FreePiConnectModal from './FreePiConnectModal.svelte'
   import FreePiAdBanner from './FreePiAdBanner.svelte'
@@ -366,13 +366,14 @@
   let registeredRows = $derived<ModelRowView[]>(
     allAvailableModels.map((m) => {
       const caps = modelCaps[m.id] ?? m.caps
+      const fallback = getModelCaps(m.id)
       return {
         id: m.id,
         name: m.name,
         source: m.isCustom ? 'custom' : 'registry',
         caps: {
-          vision: !!caps?.vision,
-          reasoning: !!caps?.reasoning,
+          vision: !!caps?.vision || fallback.vision,
+          reasoning: !!caps?.reasoning || fallback.reasoning,
           search: !!caps?.search,
           free: !!caps?.free,
           jailbreak: !!caps?.jailbreak,
@@ -392,12 +393,13 @@
       // a legacy alias row has no saved block, so the capability registry's
       // own id-based resolution is the only source left.
       const caps = modelCaps[r.id]
+      const fallback = getModelCaps(r.id)
       return {
         id: r.id,
         source: r.source,
         caps: {
-          vision: !!caps?.vision,
-          reasoning: !!caps?.reasoning,
+          vision: !!caps?.vision || fallback.vision,
+          reasoning: !!caps?.reasoning || fallback.reasoning,
           search: !!caps?.search,
           free: !!caps?.free,
           jailbreak: !!caps?.jailbreak,
@@ -3402,22 +3404,29 @@
 </script>
 
 <div class="flex min-w-0 flex-col gap-6 px-1 sm:gap-8 sm:px-0">
-  <!-- 0. Header: Back button + Provider Icon & Name -->
-  <div class="min-w-0">
+  <!-- 0. Header Hero Card -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface via-surface to-surface-2/40 p-4 sm:p-6 shadow-[var(--shadow-soft)]">
+    <!-- Ambient color glow behind icon -->
+    <div
+      class="pointer-events-none absolute -top-16 -left-16 size-48 rounded-full blur-3xl opacity-20"
+      style="background-color: {providerColor};"
+    ></div>
+
     <button
       type="button"
       onclick={onBack}
-      class="inline-flex items-center gap-1 text-sm text-text-muted hover:text-primary transition-colors mb-4 cursor-pointer"
+      class="group inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-primary transition-colors mb-4 cursor-pointer"
     >
-      <span class="material-symbols-outlined text-lg">arrow_back</span>
-      Back to Providers
+      <span class="material-symbols-outlined text-base transition-transform group-hover:-translate-x-0.5">arrow_back</span>
+      <span>Back to Providers</span>
     </button>
 
-    <div class="flex min-w-0 items-center justify-between gap-3 sm:gap-4">
-      <div class="flex min-w-0 items-center gap-3 sm:gap-4">
+    <div class="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex min-w-0 items-start sm:items-center gap-4">
+        <!-- Elevated Icon Container -->
         <div
-          class="flex size-12 shrink-0 items-center justify-center rounded-lg"
-          style="background-color: {providerColor}15;"
+          class="flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-sm border border-black/5 dark:border-white/10 transition-transform"
+          style="background-color: {providerColor}18;"
         >
           <ProviderIcon
             id={providerId}
@@ -3427,43 +3436,63 @@
           />
         </div>
 
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h1 class="truncate text-2xl font-bold tracking-tight text-text-main sm:text-3xl">
               {providerName}
             </h1>
+            {#if isProviderAllDisabled}
+              <Badge variant="default" size="sm">
+                <span class="flex items-center gap-1 text-amber-500">
+                  <PauseCircle class="w-3.5 h-3.5" />
+                  Disabled
+                </span>
+              </Badge>
+            {:else if providerConnections.length > 0}
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Active
+              </span>
+            {/if}
+            {#if selectedNode}
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Custom Node
+              </span>
+            {/if}
+          </div>
+
+          <div class="mt-2 flex items-center gap-2.5 flex-wrap text-xs text-text-muted">
+            <span class="inline-flex items-center gap-1 font-medium bg-surface-2 px-2.5 py-0.5 rounded-md border border-border/50">
+              <span class="material-symbols-outlined text-[14px]">link</span>
+              {providerConnections.length} {providerConnections.length === 1 ? 'connection' : 'connections'}
+            </span>
+            <span class="inline-flex items-center gap-1 font-medium bg-surface-2 px-2.5 py-0.5 rounded-md border border-border/50">
+              <span class="material-symbols-outlined text-[14px]">smart_toy</span>
+              {allAvailableModels.length} models
+            </span>
             {#if providerWebsite}
               <a
                 href={providerWebsite}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                class="inline-flex items-center gap-1 text-text-muted hover:text-primary transition-colors hover:underline"
               >
-                <span class="material-symbols-outlined text-sm">open_in_new</span>
-                {providerWebsiteLabel}
+                <span class="material-symbols-outlined text-xs">open_in_new</span>
+                <span>{providerWebsiteLabel}</span>
               </a>
-            {/if}
-          </div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <p class="text-text-muted">
-              {providerConnections.length} connection{providerConnections.length === 1 ? '' : 's'}
-            </p>
-            {#if isProviderAllDisabled}
-              <Badge variant="default" size="sm">
-                <span class="flex items-center gap-1">
-                  <PauseCircle class="w-3 h-3" />
-                  Disabled
-                </span>
-              </Badge>
             {/if}
           </div>
         </div>
       </div>
 
       {#if providerConnections.length > 0}
-        <div class="flex shrink-0 items-center gap-2 self-center ml-auto">
+        <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+          <div class="text-xs text-text-muted text-right hidden sm:block">
+            <div class="font-medium text-text-main">{isProviderActive ? 'Provider Enabled' : 'Provider Disabled'}</div>
+            <div class="text-[11px]">{isProviderActive ? 'Routing requests' : 'Temporarily suspended'}</div>
+          </div>
           <Toggle
-            size="sm"
+            size="md"
             checked={isProviderActive}
             onChange={handleToggleProvider}
             title={isProviderActive ? 'Disable all connections for this provider' : 'Enable all connections for this provider'}
@@ -4577,25 +4606,34 @@
                        model with no capabilities at all. -->
                   {#if row.caps.vision}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-text-muted/70" style="font-size: 12px;">visibility</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                        <Eye class="w-3 h-3" />
+                        <span>Vision</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Vision — Supports image input
+                        Vision — Supports image and visual inputs
                       </div>
                     </div>
                   {/if}
                   {#if row.caps.reasoning}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-text-muted/70" style="font-size: 12px;">neurology</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                        <Brain class="w-3 h-3" />
+                        <span>Reasoning</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Reasoning — Supports reasoning / thinking
+                        Reasoning — Deep thinking & chain-of-thought
                       </div>
                     </div>
                   {/if}
                   {#if row.caps.jailbreak}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-red-500/80" style="font-size: 12px;">local_fire_department</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
+                        <span class="material-symbols-outlined text-[11px]">local_fire_department</span>
+                        <span>Uncensored</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Jailbreak — Uncensored / unrestricted
+                        Jailbreak — Uncensored / unrestricted model
                       </div>
                     </div>
                   {/if}
@@ -4817,12 +4855,21 @@
       {#each gridModels as model (model.id)}
         {@const level = resolveThinkingSuffix(model.id)}
         {@const fullModelId = `${storageAlias}/${model.id}${level ? `(${level})` : ''}`}
-        {@const rowCaps = modelCaps[model.id] ?? model.caps}
+        {@const clientCaps = getModelCaps(model.id)}
+        {@const baseCaps = modelCaps[model.id] ?? model.caps}
+        {@const hasVision = Boolean(baseCaps?.vision || clientCaps.vision)}
+        {@const hasReasoning = Boolean(baseCaps?.reasoning || clientCaps.reasoning)}
+        {@const rowCaps = {
+          vision: hasVision,
+          reasoning: hasReasoning,
+          free: Boolean(baseCaps?.free),
+          jailbreak: Boolean(baseCaps?.jailbreak),
+        }}
         {@const testStatus = modelTestStatuses[model.id]}
         {@const isTestingThis = testStatus === 'testing'}
         {@const isSessionActive = checkIsActiveSession(model.id)}
         <div
-          class="group min-w-0 max-w-full rounded-lg border px-3 py-2 {testStatus === 'ok' ? 'border-green-500/40' : testStatus === 'blocked' ? 'border-amber-500/40' : testStatus === 'error' ? 'border-red-500/40' : 'border-border'} hover:bg-sidebar/50 transition-colors"
+          class="group min-w-0 max-w-full rounded-xl border px-3 py-2.5 {testStatus === 'ok' ? 'border-green-500/40 bg-surface' : testStatus === 'blocked' ? 'border-amber-500/40 bg-surface' : testStatus === 'error' ? 'border-red-500/40 bg-surface' : 'border-border/80 bg-surface'} hover:border-border hover:shadow-xs transition-all"
         >
           <div class="flex min-w-0 items-start gap-2 sm:items-center">
             <input
@@ -4835,11 +4882,11 @@
             <span class="material-symbols-outlined shrink-0 text-base text-text-muted">smart_toy</span>
             <div class="flex min-w-0 flex-1 flex-col gap-1">
               <div class="flex items-center gap-1.5 flex-wrap">
-                <code class="max-w-[72vw] truncate rounded bg-sidebar px-1.5 py-0.5 font-mono text-xs text-text-muted sm:max-w-[360px]">
+                <code class="max-w-[72vw] truncate rounded-md bg-sidebar px-2 py-0.5 font-mono text-xs text-text-muted sm:max-w-[360px] border border-border/40">
                   {fullModelId}
                 </code>
                 {#if rowCaps?.free}
-                  <span class="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  <span class="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                     FREE
                   </span>
                 {/if}
@@ -4851,35 +4898,44 @@
                 {/if}
                 <DeprecatedBadge provider={providerId} model={model.id} />
               </div>
-              <span class="flex min-w-0 items-center text-[9px] gap-1 pl-1">
-                <span class="truncate text-[9px] italic text-text-muted/70">{model.name}</span>
-                <span class="inline-flex items-center gap-0.5">
-                  {#if rowCaps?.vision}
+              <div class="flex min-w-0 items-center gap-2 flex-wrap pl-0.5">
+                <span class="truncate text-[11px] text-text-muted/80">{model.name}</span>
+                <span class="inline-flex items-center gap-1 flex-wrap">
+                  {#if hasVision}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-text-muted/70" style="font-size: 12px;">visibility</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                        <Eye class="w-3 h-3" />
+                        <span>Vision</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Vision — Supports image input
+                        Vision — Supports image and visual inputs
                       </div>
                     </div>
                   {/if}
-                  {#if rowCaps?.reasoning}
+                  {#if hasReasoning}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-text-muted/70" style="font-size: 12px;">neurology</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                        <Brain class="w-3 h-3" />
+                        <span>Reasoning</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Reasoning — Supports reasoning / thinking
+                        Reasoning — Deep thinking & chain-of-thought
                       </div>
                     </div>
                   {/if}
                   {#if rowCaps?.jailbreak}
                     <div class="relative inline-flex group/tt">
-                      <span class="material-symbols-outlined leading-none cursor-help text-red-500/80" style="font-size: 12px;">local_fire_department</span>
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
+                        <span class="material-symbols-outlined text-[11px]">local_fire_department</span>
+                        <span>Uncensored</span>
+                      </span>
                       <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Jailbreak — Uncensored / unrestricted
+                        Jailbreak — Uncensored / unrestricted model
                       </div>
                     </div>
                   {/if}
                 </span>
-              </span>
+              </div>
             </div>
               {#if modelTestErrors[model.id]}
                 <span class="text-[9px] {testStatus === 'blocked' ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'} font-medium pl-1 truncate max-w-[280px]" title={modelTestErrors[model.id]}>

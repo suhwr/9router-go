@@ -82,31 +82,35 @@
     if (remaining === null || !Number.isFinite(remaining)) {
       return {
         text: 'text-text-muted',
-        bg: 'bg-gray-400 dark:bg-gray-600',
-        bgLight: 'bg-gray-400/10 dark:bg-gray-600/10',
+        bg: 'bg-neutral-400 dark:bg-neutral-600',
+        bgLight: 'bg-neutral-500/10',
+        border: 'border-border/50',
         emoji: '⚪',
       }
     }
     if (remaining > 70) {
       return {
-        text: 'text-green-600 dark:text-green-400',
-        bg: 'bg-green-500',
-        bgLight: 'bg-green-500/10',
+        text: 'text-emerald-600 dark:text-emerald-400',
+        bg: 'bg-emerald-500',
+        bgLight: 'bg-emerald-500/15',
+        border: 'border-emerald-500/30',
         emoji: '🟢',
       }
     }
     if (remaining >= 30) {
       return {
-        text: 'text-yellow-600 dark:text-yellow-400',
-        bg: 'bg-yellow-500',
-        bgLight: 'bg-yellow-500/10',
+        text: 'text-amber-600 dark:text-amber-400',
+        bg: 'bg-amber-500',
+        bgLight: 'bg-amber-500/15',
+        border: 'border-amber-500/30',
         emoji: '🟡',
       }
     }
     return {
-      text: 'text-red-600 dark:text-red-400',
-      bg: 'bg-red-500',
-      bgLight: 'bg-red-500/10',
+      text: 'text-rose-600 dark:text-rose-400',
+      bg: 'bg-rose-500',
+      bgLight: 'bg-rose-500/15',
+      border: 'border-rose-500/30',
       emoji: '🔴',
     }
   }
@@ -122,21 +126,21 @@
 </script>
 
 {#if quotas && quotas.length > 0}
-  <div class="space-y-2">
-    <div class="flex items-center justify-between gap-2">
-      <div class="text-[10px] text-text-muted">
+  <div class="space-y-1.5">
+    <div class="flex items-center justify-between gap-2 px-0.5">
+      <div class="text-[10px] font-medium text-text-muted">
         {sortedQuotas.length} quota{sortedQuotas.length > 1 ? 's' : ''}
       </div>
       {#if showSortLabel}
         <div
-          class="rounded-md border border-border-subtle bg-surface-2 px-2 py-1 text-[10px] text-text-muted"
+          class="rounded border border-border-subtle bg-surface-2 px-1.5 py-0.5 text-[9px] text-text-muted"
         >
-          Sorted by account remaining
+          Sorted by remaining
         </div>
       {/if}
     </div>
 
-    <div class="space-y-1.5">
+    <div class="space-y-1">
       {#each sortedQuotas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) as quota (
         `${quota.name}-${quota.index}`
       )}
@@ -147,7 +151,8 @@
           ? {
               text: 'text-blue-600 dark:text-blue-400',
               bg: 'bg-blue-500',
-              bgLight: 'bg-blue-500/10',
+              bgLight: 'bg-blue-500/15',
+              border: 'border-blue-500/30',
               emoji: '💰',
             }
           : colorClassesFor((quota.colorPercentage as number | undefined) ?? quota.remainingPct)}
@@ -157,25 +162,32 @@
         {@const countdownLabel = recurring ? `in ${countdown}` : `expires in ${countdown}`}
 
         <div
-          class="flex flex-col gap-1.5 rounded-xl border border-border-subtle/50 bg-surface/60 p-2.5 transition-all hover:bg-surface-2/60 hover:border-border-subtle"
+          class="group/row flex flex-col gap-1 rounded-lg border border-border/70 bg-surface/80 px-2.5 py-1.5 transition-all hover:bg-surface-2 hover:border-border shadow-2xs"
         >
-          <!-- Top Row: Name + Emoji + Status Badge -->
-          <div class="flex items-center justify-between gap-2 min-w-0">
-            <div class="flex items-center gap-1.5 min-w-0">
+          <!-- Line 1: Emoji, Name, Usage/Countdown, Percentage Pill, Hide -->
+          <div class="flex items-center justify-between gap-1.5 min-w-0">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
               <span class="text-xs shrink-0 select-none">{colors.emoji}</span>
-              <span class="text-xs font-semibold text-text-main truncate" title={quota.name}>
+              <span class="text-xs font-semibold text-text-main truncate max-w-[130px] sm:max-w-[200px]" title={quota.name}>
                 {quota.name}
               </span>
+              {#if countdown !== '-' || resetDisplay}
+                <span class="hidden sm:inline-flex items-center gap-1 text-[10px] text-text-muted font-medium ml-1 truncate">
+                  <span class="material-symbols-outlined text-[12px] opacity-60">schedule</span>
+                  {countdown !== '-' ? countdownLabel : resetDisplay}
+                </span>
+              {/if}
             </div>
+
             <div class="flex items-center gap-1.5 shrink-0">
               <span
-                class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums {isUnlimited
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                class="rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums border {isUnlimited
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                   : isCreditBalance
-                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
                     : isUnknown
-                      ? 'bg-surface-3 text-text-muted'
-                      : colors.text}"
+                      ? 'bg-surface-3 text-text-muted border-border/50'
+                      : `${colors.bgLight} ${colors.text} ${colors.border}`}"
               >
                 {isUnlimited ? 'Unlimited' : isCreditBalance ? `${(quota.total || 0).toFixed(2)} ${quota.currency || ''}` : isUnknown ? '—' : `${quota.remainingPct}%`}
               </span>
@@ -183,21 +195,19 @@
                 <button
                   type="button"
                   onclick={() => onHideQuota?.(quota)}
-                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main cursor-pointer"
+                  class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted/60 opacity-60 hover:opacity-100 transition-opacity hover:bg-surface-3 hover:text-text-main cursor-pointer"
                   title="Hide this quota row"
                   aria-label="Hide quota {quota.name}"
                 >
-                  <span class="material-symbols-outlined text-[15px]">visibility_off</span>
+                  <span class="material-symbols-outlined text-[13px]">visibility_off</span>
                 </button>
               {/if}
             </div>
           </div>
 
-          <!-- Middle Row: Progress Bar -->
+          <!-- Line 2: Slim Progress Bar -->
           {#if !isUnlimited && !isCreditBalance && !isUnknown}
-            <div
-              class="h-1.5 w-full rounded-full overflow-hidden bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5"
-            >
+            <div class="h-1 w-full rounded-full overflow-hidden bg-black/5 dark:bg-white/10">
               <div
                 class="h-full transition-all duration-300 rounded-full {colors.bg}"
                 style:width="{Math.min(quota.remainingPct ?? 0, 100)}%"
@@ -205,25 +215,18 @@
             </div>
           {/if}
 
-          <!-- Bottom Row: Usage numbers & Reset countdown -->
-          <div class="flex items-center justify-between gap-2 text-xs text-text-muted min-w-0">
-            <span
-              class="truncate font-mono text-[11px] text-text-muted"
-              title={isUnlimited
-                ? `${fmtNum(quota.used)} used · Unlimited`
-                : isCreditBalance
-                  ? `Credit balance: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
-                  : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
-            >
+          <!-- Line 3: Compact info (mobile countdown + numbers) -->
+          <div class="flex items-center justify-between gap-1 text-[10px] text-text-muted font-mono leading-none">
+            <span class="truncate">
               {isUnlimited
                 ? `${fmtNum(quota.used)} used`
                 : isCreditBalance
                   ? `Credit: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
                   : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
             </span>
-            {#if countdown !== '-' || resetDisplay}
-              <span class="truncate text-[11px] font-medium text-text-muted flex items-center gap-1 shrink-0">
-                <span class="material-symbols-outlined text-[13px] opacity-70">schedule</span>
+            {#if (countdown !== '-' || resetDisplay)}
+              <span class="sm:hidden inline-flex items-center gap-0.5 text-[9px] font-sans font-medium text-text-muted shrink-0">
+                <span class="material-symbols-outlined text-[11px] opacity-60">schedule</span>
                 {countdown !== '-' ? countdownLabel : resetDisplay}
               </span>
             {/if}

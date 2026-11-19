@@ -8174,8 +8174,17 @@ export function getModelCaps(modelId: string, modelObj?: unknown): { vision: boo
       idLower.includes("gpt-6") ||
       idLower.includes("opus") ||
       idLower.includes("sonnet") ||
-      idLower.includes("haiku-4.5") ||
+      idLower.includes("haiku") ||
       idLower.includes("fable") ||
+      idLower.includes("pixtral") ||
+      idLower.includes("gpt-4-turbo") ||
+      idLower.includes("llama-3.2") ||
+      idLower.includes("qwen-vl") ||
+      idLower.includes("qwenvl") ||
+      idLower.includes("glm-4v") ||
+      idLower.includes("internvl") ||
+      idLower.includes("step-1v") ||
+      idLower.includes("doubao-vision") ||
       idLower.includes("kimi-k2") ||
       idLower.includes("kimi-k3") ||
       idLower.includes("minimax-m2.7") ||
@@ -8208,6 +8217,16 @@ export function getModelCaps(modelId: string, modelObj?: unknown): { vision: boo
     idLower.includes("r1") ||
     idLower.includes("o1") ||
     idLower.includes("o3") ||
+    idLower.includes("o4") ||
+    idLower.includes("qwq") ||
+    idLower.includes("qvq") ||
+    idLower.includes("claude-3-7") ||
+    idLower.includes("claude-3.7") ||
+    idLower.includes("deepseek") ||
+    idLower.includes("kaguya") ||
+    idLower.includes("skywork-o1") ||
+    idLower.includes("marco-o1") ||
+    idLower.includes("pro-agent") ||
     idLower.includes("tiered") ||
     idLower.includes("high") ||
     idLower.includes("medium") ||

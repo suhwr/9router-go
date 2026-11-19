@@ -95,6 +95,7 @@
   let editDraft = $state('')
   let draggedIdx = $state<number | null>(null)
   let dragOverIdx = $state<number | null>(null)
+  let activeModalTab = $state<'models' | 'rules' | 'advanced'>('models')
 
   // Smart rules. The modal is remounted per open (the {#key} block in
   // CombosView), so reading the stored list once here is the reset.
@@ -383,8 +384,8 @@
   title={editingCombo ? 'Edit Combo' : 'Create Combo'}
   size="lg"
 >
-  <div class="flex flex-col gap-3">
-    <!-- Name -->
+  <div class="flex flex-col gap-3.5">
+    <!-- Name Input -->
     <div>
       <Input
         label="Combo Name"
@@ -393,427 +394,488 @@
         error={modalNameError}
       />
       <p class="text-[10px] text-text-muted mt-0.5">
-        Only letters, numbers, -, _ and . allowed
+        Only letters, numbers, -, _ and . allowed. Client requests to this name route through the model chain.
       </p>
     </div>
 
-    <!-- Custom system prompt: optional per-combo override of the global system prompt. -->
-    <div>
-      <label class="text-sm font-medium text-text-main">Custom System Prompt</label>
-      <textarea
-        bind:value={customPrompt}
-        placeholder="Leave empty to use the global system prompt"
-        rows={3}
-        class="w-full min-h-[80px] rounded border border-border bg-surface px-2.5 py-1.5 text-sm text-text-main focus:outline-none focus:border-brand-500"
-      />
-      <p class="text-[10px] text-text-muted mt-0.5">
-        Optional system prompt used only by this combo. When set, it replaces the
-        global custom prompt prefix/suffix for requests routed through this combo.
-      </p>
+    <!-- Segmented Tab Navigation -->
+    <div class="flex items-center gap-1 p-1 bg-surface-2 rounded-xl border border-border-subtle shrink-0">
+      <button
+        type="button"
+        onclick={() => (activeModalTab = 'models')}
+        class="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer {activeModalTab === 'models' ? 'bg-surface text-brand-500 shadow-sm border border-border/60' : 'text-text-muted hover:text-text-main'}"
+      >
+        <Layers class="w-3.5 h-3.5" />
+        <span>Models</span>
+        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums {activeModalTab === 'models' ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400' : 'bg-surface-3 text-text-muted'}">
+          {models.length}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onclick={() => (activeModalTab = 'rules')}
+        class="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer {activeModalTab === 'rules' ? 'bg-surface text-brand-500 shadow-sm border border-border/60' : 'text-text-muted hover:text-text-main'}"
+      >
+        <span class="material-symbols-outlined text-[15px]">auto_awesome</span>
+        <span>Smart Rules</span>
+        {#if rules.length > 0}
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            {rules.length}
+          </span>
+        {/if}
+      </button>
+
+      <button
+        type="button"
+        onclick={() => (activeModalTab = 'advanced')}
+        class="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer {activeModalTab === 'advanced' ? 'bg-surface text-brand-500 shadow-sm border border-border/60' : 'text-text-muted hover:text-text-main'}"
+      >
+        <span class="material-symbols-outlined text-[15px]">tune</span>
+        <span>Policies & Timeouts</span>
+        {#if timeoutMs || customPrompt}
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+        {/if}
+      </button>
     </div>
 
-    <!-- Model response timeout: a failover control, so it sits right under the
-         name rather than in the card's right column. -->
-    <div class="rounded-lg border border-border bg-surface-2 p-3">
-      <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-[18px] text-brand-500">timer</span>
-        <label for="combo-response-timeout" class="text-sm font-medium">Model response timeout</label>
-        <div class="ml-auto flex items-center gap-1.5">
-          <input
-            id="combo-response-timeout"
-            type="number"
-            min="0"
-            max={MAX_FIRST_TOKEN_TIMEOUT_SECONDS}
-            step="any"
-            placeholder="Off"
-            bind:value={timeoutInput}
-            class="w-24 rounded-lg border bg-surface px-2.5 py-1.5 text-sm text-text-main focus:outline-none focus:border-brand-500 {timeoutError ? 'border-red-500' : 'border-border'}"
-          />
-          <span class="text-sm text-text-muted">seconds</span>
+    <!-- Tab 1: Models -->
+    {#if activeModalTab === 'models'}
+      <div class="flex flex-col gap-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-medium text-text-muted">Execution Order (Top = Highest Priority)</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <!-- Sort dropdown -->
+            <select
+              value={sortKey}
+              onchange={(e) => applySort(e.currentTarget.value as ComboSortKey)}
+              class="rounded border border-border bg-surface px-1.5 py-1 text-[11px] text-text-main focus:outline-none focus:border-brand-500 cursor-pointer shrink-0"
+              title="Reorder the members once. You can drag anything back afterwards."
+            >
+              {#each COMBO_SORT_OPTIONS as opt (opt.value)}
+                <option value={opt.value} title={opt.hint}>{opt.label}</option>
+              {/each}
+            </select>
+            {#if sortNote}
+              <span class="text-[10px] text-text-subtle shrink-0">{sortNote}</span>
+            {/if}
+            <button
+              type="button"
+              onclick={onOpenModelPicker}
+              class="inline-flex items-center gap-1 rounded-lg bg-brand-500/10 border border-brand-500/30 px-2 py-1 text-[11px] font-semibold text-brand-500 hover:bg-brand-500/20 transition-colors cursor-pointer shrink-0"
+            >
+              <Plus class="w-3.5 h-3.5 shrink-0" />
+              <span>Add Models</span>
+            </button>
+            <!-- Test Models -->
+            <button
+              type="button"
+              disabled={models.length === 0 || isTestingDraft}
+              onclick={handleTestDraftModels}
+              class="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              title={models.length === 0 ? "No models to test" : isTestingDraft ? "Testing draft models..." : "Test draft models (Dead/Alive check)"}
+            >
+              {#if isTestingDraft}
+                <Loader2 class="size-3 text-brand-500 animate-spin shrink-0" />
+              {:else}
+                <span class="material-symbols-outlined text-[13px] shrink-0">play_circle</span>
+              {/if}
+              <span>{isTestingDraft ? "Testing..." : "Test Health"}</span>
+            </button>
+            {#if Object.keys(draftTestResults).length > 0}
+              {@const alive = Object.values(draftTestResults).filter((r) => r.ok).length}
+              {@const total = Object.keys(draftTestResults).length}
+              <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                {alive}/{total} Healthy
+              </span>
+            {/if}
+          </div>
         </div>
-      </div>
-      <p class="mt-1.5 text-xs text-text-muted">{RESPONSE_TIMEOUT_HELP}</p>
-      {#if timeoutError}
-        <p class="mt-1 text-xs text-red-500" role="alert">{timeoutError}</p>
-      {/if}
-      <div class="mt-3 flex items-center gap-2 border-t border-border pt-3 {timeoutMs ? '' : 'opacity-50'}">
-        <span class="material-symbols-outlined text-[18px] text-text-muted">hourglass_top</span>
-        <label for="combo-response-grace" class="text-sm font-medium">Grace period after a timeout</label>
-        <div class="ml-auto flex items-center gap-1.5">
-          <input
-            id="combo-response-grace"
-            type="number"
-            min="0"
-            max={MAX_FIRST_TOKEN_TIMEOUT_SECONDS}
-            step="any"
-            placeholder={String(DEFAULT_FIRST_TOKEN_GRACE_SECONDS)}
-            disabled={!timeoutMs}
-            bind:value={graceInput}
-            class="w-24 rounded-lg border bg-surface px-2.5 py-1.5 text-sm text-text-main focus:outline-none focus:border-brand-500 disabled:cursor-not-allowed {graceError ? 'border-red-500' : 'border-border'}"
-          />
-          <span class="text-sm text-text-muted">seconds</span>
-        </div>
-      </div>
-      <p class="mt-1.5 text-xs text-text-muted">
-        A model that times out is left out of this combo for this long, then rejoins the chain.
-        Leave empty for the default ({DEFAULT_FIRST_TOKEN_GRACE_SECONDS / 60} minutes); 0 retries it on the next request.
-        The pause is kept in memory and resets when the gateway restarts.
-      </p>
-      {#if graceError}
-        <p class="mt-1 text-xs text-red-500" role="alert">{graceError}</p>
-      {/if}
-    </div>
-    <!-- Smart rules: the source of membership, so it sits above the list it
-         feeds. With twenty members the list fills the modal, and a rules
-         editor below it was only reachable by scrolling past the result to
-         reach the mechanism that produced it. -->
-    <div>
-      <div class="flex items-center justify-between mb-1.5">
-        <label class="text-sm font-medium">Smart rules</label>
-        <button
-          type="button"
-          onclick={addRule}
-          class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-brand-500 hover:bg-brand-500/10 transition-colors cursor-pointer"
-        >
-          <Plus class="w-3 h-3" />
-          <span>Add rule</span>
-        </button>
-      </div>
-      <p class="text-[10px] text-text-muted mb-2">
-        A model that matches a rule joins this combo by itself, and leaves it when it disappears.
-        Models you pick below are yours to keep.
-      </p>
-      {#if rules.length === 0}
-        <div
-          class="text-center py-3 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01] text-[11px] text-text-muted italic"
-        >
-          No rules — this combo holds only the models you picked.
-        </div>
-      {:else}
-        <div class="flex flex-col gap-2">
-          {#each rules as rule, idx (rule.id)}
-            <div class="rounded-lg border border-border bg-surface-2 p-2 flex flex-col gap-1.5">
-              <div class="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={rule.enabled}
-                  onchange={(e) => (rule.enabled = e.currentTarget.checked)}
-                  class="size-3.5 shrink-0 cursor-pointer accent-brand-500"
-                  title={rule.enabled ? 'Rule is on' : 'Rule is off'}
-                />
-                <input
-                  type="text"
-                  value={rule.pattern}
-                  oninput={(e) => (rule.pattern = e.currentTarget.value)}
-                  placeholder="kenari/deepseek*"
-                  class="min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1 font-mono text-xs text-text-main focus:outline-none focus:border-brand-500"
-                />
+
+        {#if models.length === 0}
+          <div class="text-center py-8 border border-dashed border-border-subtle rounded-xl bg-surface-2/40 flex flex-col items-center justify-center gap-2">
+            <Layers class="w-8 h-8 text-text-muted opacity-40" />
+            <p class="text-xs text-text-muted">No models in this combo yet.</p>
+            <Button size="sm" variant="outline" onclick={onOpenModelPicker}>
+              <Plus class="w-3.5 h-3.5 mr-1" />
+              Browse & Add Models
+            </Button>
+          </div>
+        {:else}
+          <div class="flex flex-col gap-1.5 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+            {#each models as model, idx}
+              {@const caps = getModelCaps(model)}
+              {@const res = draftTestResults[model]}
+              {@const isModelActive = isTestingDraft && draftActiveModel === model}
+              <div
+                class="group flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-surface px-2.5 py-1.5 shadow-[var(--shadow-soft)] transition-all hover:border-brand-500/40 {draggedIdx === idx ? 'opacity-40 bg-brand-500/10' : dragOverIdx === idx ? 'border-2 border-brand-500 bg-brand-500/5' : ''}"
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, idx)}
+                ondragover={(e) => handleDragOver(e, idx)}
+                ondragleave={() => handleDragLeave(idx)}
+                ondrop={(e) => handleDrop(e, idx)}
+                ondragend={handleDragEnd}
+              >
+                <GripVertical class="w-3.5 h-3.5 text-text-muted/60 cursor-grab active:cursor-grabbing shrink-0 hover:text-text-main" />
+                <span class="inline-flex items-center justify-center size-5 rounded-full bg-surface-2 text-[10px] font-bold text-text-muted shrink-0 border border-border/50">
+                  {idx + 1}
+                </span>
+
+                {#if editingIdx === idx}
+                  <input
+                    autofocus
+                    bind:value={editDraft}
+                    onblur={() => commitEdit(idx)}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') commitEdit(idx)
+                      if (e.key === 'Escape') editingIdx = null
+                    }}
+                    class="min-w-0 flex-1 rounded border border-brand-500/40 bg-surface px-2 py-0.5 font-mono text-xs text-text-main outline-none"
+                  />
+                {:else}
+                  <div
+                    class="min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs text-text-main hover:bg-surface-2"
+                    onclick={() => startEdit(idx, model)}
+                    onkeydown={(e) => e.key === 'Enter' && startEdit(idx, model)}
+                    role="textbox"
+                    tabindex="0"
+                    title="Click to rename"
+                  >
+                    <div class="inline-flex items-center gap-1.5">
+                      {#if isModelActive}
+                        <Loader2 class="size-3 text-brand-500 animate-spin shrink-0" />
+                      {:else if res}
+                        <span class="material-symbols-outlined text-[13px] {res.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
+                          {res.ok ? 'check_circle' : 'cancel'}
+                        </span>
+                      {/if}
+                      <span class="font-semibold text-text-main">{model}</span>
+                      {#if res?.ok}
+                        <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-sans">{res.latencyMs}ms</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+
+                <!-- Consistent Capability Badges -->
+                <div class="flex items-center gap-1 shrink-0">
+                  {#if caps.vision}
+                    <span
+                      class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                      title="Vision — Supports image and visual inputs"
+                    >
+                      <Eye class="w-3 h-3 shrink-0" />
+                      <span>Vision</span>
+                    </span>
+                  {/if}
+                  {#if caps.reasoning}
+                    <span
+                      class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                      title="Reasoning — Supports step-by-step thinking/reasoning"
+                    >
+                      <Brain class="w-3 h-3 shrink-0" />
+                      <span>Reasoning</span>
+                    </span>
+                  {/if}
+                </div>
+
+                <!-- Reorder buttons -->
+                <div class="flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    onclick={() => moveModel(idx, -1)}
+                    disabled={idx === 0}
+                    class="size-6 flex items-center justify-center rounded border border-border/50 bg-surface-2 transition-colors {idx === 0 ? 'opacity-20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
+                    title="Move up"
+                  >
+                    <ArrowUp class="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => moveModel(idx, 1)}
+                    disabled={idx === models.length - 1}
+                    class="size-6 flex items-center justify-center rounded border border-border/50 bg-surface-2 transition-colors {idx === models.length - 1 ? 'opacity-20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
+                    title="Move down"
+                  >
+                    <ArrowDown class="w-3 h-3" />
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onclick={() => removeRule(idx)}
-                  class="shrink-0 rounded p-1 text-text-muted hover:bg-red-500/10 hover:text-red-500 transition-colors cursor-pointer"
-                  title="Remove rule"
+                  onclick={() => removeModel(idx)}
+                  class="p-1 hover:bg-red-500/10 rounded-md text-text-muted hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                  title="Remove from combo"
                 >
                   <X class="w-3.5 h-3.5" />
                 </button>
               </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <select
-                  value={rule.mode}
-                  onchange={(e) => (rule.mode = e.currentTarget.value as SmartRule['mode'])}
-                  class="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
-                  title="How the pattern is matched"
-                >
-                  {#each SMART_RULE_MODES as mode (mode.value)}
-                    <option value={mode.value}>{mode.label}</option>
-                  {/each}
-                </select>
-                <select
-                  value={rule.effect}
-                  onchange={(e) => (rule.effect = e.currentTarget.value as SmartRule['effect'])}
-                  class="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
-                  title="Add matching models, or keep them out"
-                >
-                  <option value="include">Add</option>
-                  <option value="exclude">Exclude</option>
-                </select>
-                <label class="flex items-center gap-1 text-[10px] text-text-muted" title="0 means no cap">
-                  <span>max</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={rule.maxMembers}
-                    oninput={(e) => (rule.maxMembers = Math.max(0, Number(e.currentTarget.value) || 0))}
-                    class="w-14 rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-main focus:outline-none focus:border-brand-500"
-                  />
-                </label>
-                <label class="flex items-center gap-1 text-[10px] text-text-muted" title="Also match embedding, image, tts and stt models">
-                  <input
-                    type="checkbox"
-                    checked={rule.allKinds}
-                    onchange={(e) => (rule.allKinds = e.currentTarget.checked)}
-                    class="size-3 cursor-pointer accent-brand-500"
-                  />
-                  <span>all kinds</span>
-                </label>
-              </div>
-              <p class="text-[10px] text-text-muted">
-                {smartRuleSummary(rule, rulePreviewFor(rule.id))}
-              </p>
-            </div>
-          {/each}
-        </div>
-      {/if}
-      <!-- Load matching models: the write half of the preview above. It only
-           exists while a rule has something to say, so an operator who is not
-           using rules never sees a button that would do nothing. -->
-      {#if rulesHavePattern && editingCombo}
-        <div class="mt-2 flex flex-wrap items-center gap-2">
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+    <!-- Tab 2: Smart Rules -->
+    {:else if activeModalTab === 'rules'}
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="text-xs font-semibold text-text-main">Dynamic Pattern Rules</h4>
+            <p class="text-[10px] text-text-muted">
+              Models matching these rules dynamically join or get excluded from this combo.
+            </p>
+          </div>
           <button
             type="button"
-            onclick={loadMatchingModels}
-            disabled={isLoadingModels}
-            class="inline-flex items-center gap-1.5 rounded-lg border border-brand-500/40 bg-brand-500/10 px-2.5 py-1.5 text-[11px] font-medium text-brand-500 hover:bg-brand-500/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            onclick={addRule}
+            class="inline-flex items-center gap-1 rounded-lg bg-brand-500/10 border border-brand-500/30 px-2.5 py-1 text-xs font-semibold text-brand-500 hover:bg-brand-500/20 transition-colors cursor-pointer"
           >
-            {#if isLoadingModels}
-              <span class="size-3 animate-spin rounded-full border-2 border-brand-500/30 border-t-brand-500"></span>
-              <span>Loading…</span>
-            {:else}
-              <Layers class="w-3.5 h-3.5" />
-              <span>Load matching models</span>
-            {/if}
+            <Plus class="w-3.5 h-3.5" />
+            <span>Add Rule</span>
           </button>
-          {#if loadDelta}
-            <span class="text-[10px] {loadDelta.added > 0 || loadDelta.removed > 0 ? 'text-text-muted' : 'text-text-subtle'}">
-              {loadDelta.added > 0 || loadDelta.removed > 0
-                ? `+${loadDelta.added} match${loadDelta.added === 1 ? '' : 'es'}${loadDelta.removed > 0 ? `, −${loadDelta.removed} stale` : ''}`
-                : 'already up to date'}
-            </span>
-          {/if}
         </div>
-      {/if}
-      {#if loadError}
-        <p class="mt-1 text-[10px] text-red-600 dark:text-red-400 break-words">{loadError}</p>
-      {/if}
-      {#if rulePreviewError}
-        <p class="mt-1 text-[10px] text-red-600 dark:text-red-400 break-words">{rulePreviewError}</p>
-      {/if}
-      <!-- What the rules would put in the combo, with a per-model exclude.
-           Excluding here records the model in the owning rule's excluded list
-           rather than rewriting the pattern: the pattern stays readable, and
-           the exclusion survives every later reconcile. -->
-      {#if previewMembers.length > 0}
-        <div class="mt-2 rounded-lg border border-border bg-surface-2 p-2">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-[10px] font-medium text-text-muted">
-              {previewMembers.length} model{previewMembers.length === 1 ? '' : 's'} would join
-            </span>
+
+        {#if rules.length === 0}
+          <div class="text-center py-6 border border-dashed border-border-subtle rounded-xl bg-surface-2/40 text-xs text-text-muted italic">
+            No dynamic rules configured. This combo only routes through manually selected models.
+          </div>
+        {:else}
+          <div class="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+            {#each rules as rule, idx (rule.id)}
+              <div class="rounded-xl border border-border bg-surface-2/60 p-2.5 flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled}
+                    onchange={(e) => (rule.enabled = e.currentTarget.checked)}
+                    class="size-3.5 shrink-0 cursor-pointer accent-brand-500"
+                    title={rule.enabled ? 'Rule is on' : 'Rule is off'}
+                  />
+                  <input
+                    type="text"
+                    value={rule.pattern}
+                    oninput={(e) => (rule.pattern = e.currentTarget.value)}
+                    placeholder="provider/model-pattern* (e.g. google/gemini*)"
+                    class="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 py-1 font-mono text-xs text-text-main focus:outline-none focus:border-brand-500"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => removeRule(idx)}
+                    class="shrink-0 rounded p-1 text-text-muted hover:bg-red-500/10 hover:text-red-500 transition-colors cursor-pointer"
+                    title="Remove rule"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                  <select
+                    value={rule.mode}
+                    onchange={(e) => (rule.mode = e.currentTarget.value as SmartRule['mode'])}
+                    class="rounded-lg border border-border bg-surface px-2 py-0.5 text-xs text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
+                  >
+                    {#each SMART_RULE_MODES as mode (mode.value)}
+                      <option value={mode.value}>{mode.label}</option>
+                    {/each}
+                  </select>
+                  <select
+                    value={rule.effect}
+                    onchange={(e) => (rule.effect = e.currentTarget.value as SmartRule['effect'])}
+                    class="rounded-lg border border-border bg-surface px-2 py-0.5 text-xs text-text-main focus:outline-none focus:border-brand-500 cursor-pointer"
+                  >
+                    <option value="include">Add</option>
+                    <option value="exclude">Exclude</option>
+                  </select>
+                  <label class="flex items-center gap-1 text-[11px] text-text-muted">
+                    <span>Max:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={rule.maxMembers}
+                      oninput={(e) => (rule.maxMembers = Math.max(0, Number(e.currentTarget.value) || 0))}
+                      class="w-14 rounded-lg border border-border bg-surface px-1.5 py-0.5 text-xs text-text-main focus:outline-none focus:border-brand-500"
+                    />
+                  </label>
+                  <label class="flex items-center gap-1 text-[11px] text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={rule.allKinds}
+                      onchange={(e) => (rule.allKinds = e.currentTarget.checked)}
+                      class="size-3 cursor-pointer accent-brand-500"
+                    />
+                    <span>All modalities</span>
+                  </label>
+                </div>
+                <p class="text-[10px] text-text-muted">
+                  {smartRuleSummary(rule, rulePreviewFor(rule.id))}
+                </p>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if rulesHavePattern && editingCombo}
+          <div class="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
               onclick={loadMatchingModels}
               disabled={isLoadingModels}
-              class="text-[10px] font-medium text-brand-500 hover:underline cursor-pointer disabled:opacity-50"
+              class="inline-flex items-center gap-1.5 rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-semibold text-brand-500 hover:bg-brand-500/20 transition-colors cursor-pointer disabled:opacity-50"
             >
-              Load all
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-1">
-            {#each previewMembers as member}
-              {@const owner = ruleOwning(member)}
-              <span
-                class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-main"
-                title={owner ? `owned by rule ${owner.id}` : 'already a member'}
-              >
-                <span class="truncate max-w-[220px]">{member}</span>
-                {#if owner}
-                  <button
-                    type="button"
-                    onclick={() => excludeMember(member)}
-                    class="shrink-0 rounded p-0.5 text-text-muted hover:bg-red-500/10 hover:text-red-500 transition-colors cursor-pointer"
-                    title="Exclude this model from the rule that claims it"
-                  >
-                    <X class="w-2.5 h-2.5" />
-                  </button>
-                {/if}
-              </span>
-            {/each}
-          </div>
-        </div>
-      {/if}
-    </div>
-    <!-- Models -->
-    <div>
-      <div class="flex flex-wrap items-center justify-between gap-y-1.5 mb-1.5">
-        <label class="text-sm font-medium">Models</label>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <!-- Sort: a one-shot reorder of the stored list. The operator picks
-               an option, the list is rewritten, and anything can be dragged
-               back afterwards — none of these is a standing order the gateway
-               re-applies on every rule run. -->
-          <select
-            value={sortKey}
-            onchange={(e) => applySort(e.currentTarget.value as ComboSortKey)}
-            class="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-main focus:outline-none focus:border-brand-500 cursor-pointer shrink-0"
-            title="Reorder the members once. You can drag anything back afterwards."
-          >
-            {#each COMBO_SORT_OPTIONS as opt (opt.value)}
-              <option value={opt.value} title={opt.hint}>{opt.label}</option>
-            {/each}
-          </select>
-          {#if sortNote}
-            <span class="text-[10px] text-text-subtle shrink-0">{sortNote}</span>
-          {/if}
-          <button
-            type="button"
-            onclick={onOpenModelPicker}
-            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-brand-500 hover:bg-brand-500/10 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-          >
-            <Plus class="w-3 h-3 shrink-0" />
-            <span>Add Models Manually</span>
-          </button>
-          <!-- Test Models: dead/alive check for draft models -->
-          <button
-            type="button"
-            disabled={models.length === 0 || isTestingDraft}
-            onclick={handleTestDraftModels}
-            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
-            title={models.length === 0 ? "No models to test" : isTestingDraft ? "Testing draft models..." : "Test draft models (Dead/Alive check)"}
-          >
-            {#if isTestingDraft}
-              <Loader2 class="size-3.5 text-brand-500 animate-spin shrink-0" />
-            {:else}
-              <span class="material-symbols-outlined text-[13px] shrink-0">play_circle</span>
-            {/if}
-            <span class="hidden sm:inline">{isTestingDraft ? "Testing..." : "Test Models"}</span>
-          </button>
-          {#if Object.keys(draftTestResults).length > 0}
-            {@const alive = Object.values(draftTestResults).filter((r) => r.ok).length}
-            {@const total = Object.keys(draftTestResults).length}
-            <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">
-              {alive}/{total} Alive
-            </span>
-          {/if}
-        </div>
-      </div>
-
-      {#if models.length === 0}
-        <div class="text-center py-4 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01]">
-          <Layers class="w-6 h-6 text-text-muted mx-auto mb-1 opacity-50" />
-          <p class="text-xs text-text-muted">No models added yet</p>
-        </div>
-      {:else}
-        <div class="flex flex-col gap-1 max-h-[55vh] overflow-y-auto sm:max-h-[350px]">
-          {#each models as model, idx}
-            {@const caps = getModelCaps(model)}
-            <div
-              class="group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition-colors {draggedIdx === idx ? 'opacity-40 bg-brand-500/10' : dragOverIdx === idx ? 'border-2 border-brand-500 bg-brand-500/5' : 'bg-black/[0.02] hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'}"
-              draggable="true"
-              ondragstart={(e) => handleDragStart(e, idx)}
-              ondragover={(e) => handleDragOver(e, idx)}
-              ondragleave={() => handleDragLeave(idx)}
-              ondrop={(e) => handleDrop(e, idx)}
-              ondragend={handleDragEnd}
-            >
-              <GripVertical class="w-3.5 h-3.5 text-text-muted cursor-grab active:cursor-grabbing shrink-0" />
-              <span class="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{idx + 1}</span>
-              {#if editingIdx === idx}
-                <input
-                  autofocus
-                  bind:value={editDraft}
-                  onblur={() => commitEdit(idx)}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter') commitEdit(idx)
-                    if (e.key === 'Escape') editingIdx = null
-                  }}
-                  class="min-w-0 flex-1 rounded border border-brand-500/40 bg-white px-1.5 py-0.5 font-mono text-xs text-text-main outline-none dark:bg-black/20"
-                />
+              {#if isLoadingModels}
+                <Loader2 class="size-3.5 animate-spin" />
+                <span>Loading…</span>
               {:else}
-                {@const res = draftTestResults[model]}
-                {@const isModelActive = isTestingDraft && draftActiveModel === model}
-                <div
-                  class="min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs text-text-main hover:bg-black/5 dark:hover:bg-white/5"
-                  onclick={() => startEdit(idx, model)}
-                  onkeydown={(e) => e.key === 'Enter' && startEdit(idx, model)}
-                  role="textbox"
-                  tabindex="0"
-                  title="Click to edit"
-                >
-                  <code
-                    class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-xs transition-colors {res ? (res.ok ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium' : 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400 font-medium') : 'border-transparent bg-transparent text-text-main'}"
-                    title={res ? (res.ok ? `Alive · ${res.latencyMs}ms` : `Dead · ${res.error || 'Failed'}`) : isModelActive ? 'Testing...' : 'Click to edit'}
-                  >
-                    {#if isModelActive}
-                      <Loader2 class="size-3 text-brand-500 animate-spin shrink-0" />
-                    {:else if res}
-                      <span class="material-symbols-outlined text-[13px] {res.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
-                        {res.ok ? 'check_circle' : 'cancel'}
-                      </span>
-                    {/if}
-                    <span>{model}</span>
-                    {#if res?.ok}
-                      <span class="text-[10px] opacity-75 font-sans font-normal">{res.latencyMs}ms</span>
-                    {/if}
-                  </code>
-                </div>
+                <Layers class="w-3.5 h-3.5" />
+                <span>Load Matching Models</span>
               {/if}
-              {#if caps.vision}
-                <Eye class="w-3 h-3 text-blue-500 shrink-0" title="Vision — Supports image input" />
-              {/if}
-              {#if caps.reasoning}
-                <Brain class="w-3 h-3 text-amber-500 shrink-0" title="Reasoning — Supports reasoning / thinking" />
-              {/if}
-              <div class="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onclick={() => moveModel(idx, -1)}
-                  disabled={idx === 0}
-                  class="size-7 sm:size-6 flex items-center justify-center rounded-md border border-border/60 bg-surface-2 transition-colors {idx === 0 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
-                  title="Move up"
-                >
-                  <ArrowUp class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onclick={() => moveModel(idx, 1)}
-                  disabled={idx === models.length - 1}
-                  class="size-7 sm:size-6 flex items-center justify-center rounded-md border border-border/60 bg-surface-2 transition-colors {idx === models.length - 1 ? 'text-text-muted/20 cursor-not-allowed' : 'text-text-muted hover:text-brand-500 hover:bg-surface-3 cursor-pointer'}"
-                  title="Move down"
-                >
-                  <ArrowDown class="w-3.5 h-3.5" />
-                </button>
-              </div>
+            </button>
+            {#if loadDelta}
+              <span class="text-xs text-text-muted">
+                {loadDelta.added > 0 || loadDelta.removed > 0
+                  ? `+${loadDelta.added} matched${loadDelta.removed > 0 ? `, −${loadDelta.removed} stale` : ''}`
+                  : 'Already synchronized'}
+              </span>
+            {/if}
+          </div>
+        {/if}
+
+        {#if previewMembers.length > 0}
+          <div class="rounded-xl border border-border bg-surface-2/40 p-2.5">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-semibold text-text-main">
+                {previewMembers.length} model{previewMembers.length === 1 ? '' : 's'} matching rules
+              </span>
               <button
                 type="button"
-                onclick={() => removeModel(idx)}
-                class="p-0.5 hover:bg-red-500/10 rounded text-text-muted hover:text-red-500 transition-all cursor-pointer"
-                title="Remove"
+                onclick={loadMatchingModels}
+                disabled={isLoadingModels}
+                class="text-xs font-semibold text-brand-500 hover:underline cursor-pointer disabled:opacity-50"
               >
-                <X class="w-3 h-3" />
+                Import all into chain
               </button>
             </div>
-          {/each}
+            <div class="flex flex-wrap gap-1 max-h-28 overflow-y-auto custom-scrollbar">
+              {#each previewMembers as member}
+                {@const owner = ruleOwning(member)}
+                <span class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-main">
+                  <span class="truncate max-w-[200px]">{member}</span>
+                  {#if owner}
+                    <button
+                      type="button"
+                      onclick={() => excludeMember(member)}
+                      class="shrink-0 rounded p-0.5 text-text-muted hover:text-red-500 cursor-pointer"
+                      title="Exclude model"
+                    >
+                      <X class="w-2.5 h-2.5" />
+                    </button>
+                  {/if}
+                </span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+
+    <!-- Tab 3: Policies & Advanced Settings -->
+    {:else if activeModalTab === 'advanced'}
+      <div class="flex flex-col gap-3.5">
+        <!-- Response Timeout -->
+        <div class="rounded-xl border border-border bg-surface-2/50 p-3.5 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px] text-brand-500">timer</span>
+              <div>
+                <label for="combo-response-timeout" class="text-xs font-semibold text-text-main block">Model First-Token Timeout</label>
+                <span class="text-[10px] text-text-muted">Fails over to next candidate if model doesn't respond</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input
+                id="combo-response-timeout"
+                type="number"
+                min="0"
+                max={MAX_FIRST_TOKEN_TIMEOUT_SECONDS}
+                step="any"
+                placeholder="Off"
+                bind:value={timeoutInput}
+                class="w-20 rounded-lg border bg-surface px-2.5 py-1 text-xs text-text-main focus:outline-none focus:border-brand-500 text-right {timeoutError ? 'border-red-500' : 'border-border'}"
+              />
+              <span class="text-xs text-text-muted">sec</span>
+            </div>
+          </div>
+          {#if timeoutError}
+            <p class="text-xs text-red-500" role="alert">{timeoutError}</p>
+          {/if}
+
+          <!-- Grace Period -->
+          <div class="flex items-center justify-between border-t border-border/60 pt-3 {timeoutMs ? '' : 'opacity-40'}">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px] text-text-muted">hourglass_top</span>
+              <div>
+                <label for="combo-response-grace" class="text-xs font-semibold text-text-main block">Timeout Cooldown / Grace Period</label>
+                <span class="text-[10px] text-text-muted">How long a timed-out model is benched from the combo</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input
+                id="combo-response-grace"
+                type="number"
+                min="0"
+                max={MAX_FIRST_TOKEN_TIMEOUT_SECONDS}
+                step="any"
+                placeholder={String(DEFAULT_FIRST_TOKEN_GRACE_SECONDS)}
+                disabled={!timeoutMs}
+                bind:value={graceInput}
+                class="w-20 rounded-lg border bg-surface px-2.5 py-1 text-xs text-text-main focus:outline-none focus:border-brand-500 text-right disabled:cursor-not-allowed {graceError ? 'border-red-500' : 'border-border'}"
+              />
+              <span class="text-xs text-text-muted">sec</span>
+            </div>
+          </div>
+          {#if graceError}
+            <p class="text-xs text-red-500" role="alert">{graceError}</p>
+          {/if}
         </div>
-      {/if}
-    </div>
+
+        <!-- Custom Prompt -->
+        <div class="rounded-xl border border-border bg-surface-2/50 p-3.5 flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-text-main">Custom System Prompt Override</label>
+          <textarea
+            bind:value={customPrompt}
+            placeholder="Leave empty to inherit standard system prompt..."
+            rows={4}
+            class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs font-mono text-text-main focus:outline-none focus:border-brand-500 custom-scrollbar"
+          ></textarea>
+          <p class="text-[10px] text-text-muted">
+            Replaces the global system prompt prefix/suffix for all requests routed through this combo.
+          </p>
+        </div>
+      </div>
+    {/if}
 
     {#if saveError}
       <p class="text-xs text-red-600 dark:text-red-400 break-words" role="alert">{saveError}</p>
     {/if}
 
-    <!-- Actions -->
-    <div class="flex flex-col gap-2 pt-1 sm:flex-row">
-      <Button onclick={onClose} variant="ghost" fullWidth size="sm">
-        Cancel
-      </Button>
-      <Button
-        onclick={handleSave}
-        fullWidth
-        size="sm"
-        disabled={!modalName.trim() || !!modalNameError || timeoutMs === null || graceMs === null || isSaving}
-        loading={isSaving}
-      >
-        {isSaving ? 'Saving...' : editingCombo ? 'Save' : 'Create'}
-      </Button>
+    <!-- Footer Actions -->
+    <div class="flex items-center justify-between pt-3 border-t border-border-subtle mt-1">
+      <span class="text-xs text-text-muted tabular-nums">
+        {models.length} model{models.length === 1 ? '' : 's'} in combo
+      </span>
+      <div class="flex items-center gap-2">
+        <Button onclick={onClose} variant="ghost" size="sm">
+          Cancel
+        </Button>
+        <Button
+          onclick={handleSave}
+          size="sm"
+          disabled={!modalName.trim() || !!modalNameError || timeoutMs === null || graceMs === null || isSaving}
+          loading={isSaving}
+        >
+          {isSaving ? 'Saving...' : editingCombo ? 'Save Changes' : 'Create Combo'}
+        </Button>
+      </div>
     </div>
   </div>
 </Modal>

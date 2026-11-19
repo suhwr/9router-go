@@ -26,33 +26,76 @@
   }
 </script>
 
-<div class="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 sm:gap-4">
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Total Requests</span>
-    <span class="truncate text-2xl font-bold text-text-main" title={fmtTokens(stats.totalRequests)}>{fmtTokens(stats.totalRequests)}</span>
+<div class="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 sm:gap-3.5">
+  <!-- Card 1: Total Requests -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Total Requests</span>
+      <span class="material-symbols-outlined text-[15px] text-text-muted/60">swap_horiz</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight text-text-main tabular-nums" title={fmtTokens(stats.totalRequests)}>
+      {fmtTokens(stats.totalRequests)}
+    </span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">All incoming</span>
   </div>
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Success Rate</span>
-    <span class="truncate text-2xl font-bold {rateColor(stats.successRate)}" title={fmtSuccessRate(stats.successRate)}>
+
+  <!-- Card 2: Success Rate -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Success Rate</span>
+      <span class="material-symbols-outlined text-[15px] text-emerald-500/80">check_circle</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight {rateColor(stats.successRate)} tabular-nums" title={fmtSuccessRate(stats.successRate)}>
       {fmtSuccessRate(stats.successRate)}
     </span>
-    <span class="text-[10px] text-text-muted truncate">{fmtSuccessSubtext(stats)}</span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">{fmtSuccessSubtext(stats)}</span>
   </div>
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Total Input Tokens</span>
-    <span class="truncate text-2xl font-bold text-primary" title={fmtTokens(stats.totalPromptTokens)}>{fmtTokens(stats.totalPromptTokens)}</span>
+
+  <!-- Card 3: Total Input Tokens -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Input Tokens</span>
+      <span class="material-symbols-outlined text-[15px] text-primary/80">login</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight text-primary tabular-nums" title={fmtTokens(stats.totalPromptTokens)}>
+      {fmtTokens(stats.totalPromptTokens)}
+    </span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">Prompt payload</span>
   </div>
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Cached Tokens</span>
-    <span class="truncate text-2xl font-bold text-info" title={fmtTokens(stats.totalCachedTokens)}>{fmtTokens(stats.totalCachedTokens)}</span>
+
+  <!-- Card 4: Cached Tokens -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Cached Tokens</span>
+      <span class="material-symbols-outlined text-[15px] text-sky-500/80">bolt</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight text-info tabular-nums" title={fmtTokens(stats.totalCachedTokens)}>
+      {fmtTokens(stats.totalCachedTokens)}
+    </span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">Cost-saving hits</span>
   </div>
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Output Tokens</span>
-    <span class="truncate text-2xl font-bold text-success" title={fmtTokens(stats.totalCompletionTokens)}>{fmtTokens(stats.totalCompletionTokens)}</span>
+
+  <!-- Card 5: Output Tokens -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Output Tokens</span>
+      <span class="material-symbols-outlined text-[15px] text-emerald-500/80">logout</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight text-success tabular-nums" title={fmtTokens(stats.totalCompletionTokens)}>
+      {fmtTokens(stats.totalCompletionTokens)}
+    </span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">Generated output</span>
   </div>
-  <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] flex min-w-0 flex-col gap-1 px-4 py-3">
-    <span class="text-text-muted text-sm uppercase font-semibold">Est. Cost</span>
-    <span class="truncate text-2xl font-bold text-warning">~{costIn(stats.totalCost ?? 0)}</span>
-    <span class="text-[10px] text-text-muted truncate">Estimated, not actual</span>
+
+  <!-- Card 6: Estimated Cost -->
+  <div class="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-surface-2/40 p-3.5 sm:p-4 shadow-[var(--shadow-soft)] hover:border-border hover:shadow-xs transition-all flex min-w-0 flex-col justify-between">
+    <div class="flex items-center justify-between gap-1 mb-1">
+      <span class="text-[11px] font-semibold text-text-muted tracking-wide">Est. Cost</span>
+      <span class="material-symbols-outlined text-[15px] text-amber-500/80">payments</span>
+    </div>
+    <span class="truncate text-2xl font-bold tracking-tight text-warning tabular-nums">
+      ~{costIn(stats.totalCost ?? 0)}
+    </span>
+    <span class="text-[10px] text-text-muted/70 truncate mt-0.5">Estimated, not billed</span>
   </div>
 </div>
