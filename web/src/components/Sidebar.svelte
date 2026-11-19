@@ -30,6 +30,8 @@
     navOrder,
     brandName = '',
     brandLogo = '',
+    brandSubtitle = '',
+    hideBrandFooter = false,
   }: {
     activeTab: ActiveTab
     navigate?: (tab: ActiveTab, replace?: boolean) => void
@@ -45,6 +47,8 @@
     navOrder?: string[]
     brandName?: string
     brandLogo?: string
+    brandSubtitle?: string
+    hideBrandFooter?: boolean
   } = $props()
   let version = $state<string>(__APP_VERSION__ || '')
   // The white-label branding card in Settings writes these two; an empty value
@@ -249,15 +253,19 @@
           <h1 class="text-lg font-semibold tracking-tight text-text-main truncate leading-snug">
             {displayBrandName}
           </h1>
-          <span class="text-xs text-text-muted leading-tight">
-            {version ? `v${version}` : ''}
+          <span class="text-xs text-text-muted leading-tight truncate">
+            {#if brandSubtitle}
+              {brandSubtitle}
+            {:else if !hideBrandFooter && version}
+              {`v${version}`}
+            {/if}
           </span>
         </div>
       {/if}
     </a>
 
     <!-- Update notification banner below version (matches upstream 9router) -->
-    {#if updateInfo && updateInfo.hasUpdate}
+    {#if !hideBrandFooter && updateInfo && updateInfo.hasUpdate}
       <div
         class="flex flex-col gap-1.5 rounded-lg p-2 bg-green-500/10 dark:bg-amber-500/10 border border-green-500/30 dark:border-amber-500/30 text-green-700 dark:text-amber-400 mt-0.5 animate-in fade-in duration-200"
       >

@@ -694,13 +694,9 @@ func SetupServerRouter(r chi.Router, repo *db.Repo, ts *TokenSaverConfig) *chat.
 		dashH.SemanticCache = versionH.SemanticCache
 		dashH.Resilience = versionH.Resilience
 	}
-	// Operator-supplied dashboard assets (the white-label logo). Behind the
-	// same page gate as /dashboard/*, so an install that requires a login does
-	// not serve its branding to an anonymous caller.
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.RequireDashboardPage(repo))
-		r.Get("/uploads/*", dashH.HandleServeUploads)
-	})
+	// Operator-supplied dashboard branding assets (logo, favicon, background).
+	// Publicly accessible so the login page can display custom branding before authentication.
+	r.Get("/uploads/*", dashH.HandleServeUploads)
 	r.Get("/api/auth/status", dashH.HandleAuthStatus)
 	r.Post("/api/auth/login", dashH.HandleAuthLogin)
 	r.Post("/api/auth/logout", dashH.HandleAuthLogout)

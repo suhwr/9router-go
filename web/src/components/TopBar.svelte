@@ -18,6 +18,7 @@
     onLogout,
     onOpenSearch,
     requireLogin = false,
+    hideBrandFooter = false,
   }: {
     activeTab?: ActiveTab
     pageTitle?: string
@@ -28,6 +29,7 @@
     onLogout?: () => void
     onOpenSearch?: () => void
     requireLogin?: boolean
+    hideBrandFooter?: boolean
   } = $props()
 
   // The group invite rotates. Everything user-facing points at the redirect
@@ -183,7 +185,7 @@
     },
     skills: {
       title: 'Agent Skills',
-      description: 'Copy a link and paste to your AI to use 9router-go — no install needed',
+      description: 'Copy a link and paste to your AI to use the gateway — no install needed',
       icon: 'extension',
     },
     'console-log': {
@@ -316,7 +318,9 @@
       >
     </button>
     <Menu label="Account and display options" triggerIcon="account_circle" minWidth="15rem">
-      <MenuItem label="Donate" icon="volunteer_activism" onSelect={() => (isDonateOpen = true)} />
+      {#if !hideBrandFooter}
+        <MenuItem label="Donate" icon="volunteer_activism" onSelect={() => (isDonateOpen = true)} />
+      {/if}
 
       {#if canInstall}
         <MenuItem label="Install App" icon="install_desktop" onSelect={promptInstall} />

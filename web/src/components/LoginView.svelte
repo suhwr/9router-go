@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
   import { api } from '../api/client'
+  import { branding } from '../lib/branding.svelte'
 
   let {
     onSuccess,
@@ -23,6 +24,18 @@
   let samlConfigured = $state(false)
   let samlLoginLabel = $state('Sign in with SAML SSO')
   let mustChange = $state(false)
+
+  // White-label branding state
+  let appName = $state('')
+  let appLogoUrl = $state('')
+  let faviconUrl = $state('')
+  let loginTitle = $state('')
+  let loginSubtitle = $state('')
+  let loginBgUrl = $state('')
+  let loginBgBlur = $state(false)
+  let loginHideDefaultPasswordHint = $state(false)
+  let hideBrandFooter = $state(false)
+  let footerText = $state('')
 
   // Countdown for rate-limit lockout (upstream retryAfter).
   $effect(() => {
@@ -65,6 +78,33 @@
         oidcLoginLabel = data.oidcLoginLabel || 'Sign in with OIDC'
         samlConfigured = data.samlConfigured === true
         samlLoginLabel = data.samlLoginLabel || 'Sign in with SAML SSO'
+
+        if (typeof data.appName === 'string') appName = data.appName
+        if (typeof data.appLogoUrl === 'string') appLogoUrl = data.appLogoUrl
+        if (typeof data.faviconUrl === 'string') faviconUrl = data.faviconUrl
+        if (typeof data.loginTitle === 'string') loginTitle = data.loginTitle
+        if (typeof data.loginSubtitle === 'string') loginSubtitle = data.loginSubtitle
+        if (typeof data.loginBgUrl === 'string') loginBgUrl = data.loginBgUrl
+        if (typeof data.loginBgBlur === 'boolean') loginBgBlur = data.loginBgBlur
+        if (typeof data.loginHideDefaultPasswordHint === 'boolean') loginHideDefaultPasswordHint = data.loginHideDefaultPasswordHint
+        if (typeof data.hideBrandFooter === 'boolean') hideBrandFooter = data.hideBrandFooter
+        if (typeof data.footerText === 'string') footerText = data.footerText
+
+        branding.setBranding({
+          appName,
+          appLogoUrl,
+          faviconUrl,
+          loginTitle,
+          loginSubtitle,
+          loginBgUrl,
+          loginBgBlur,
+          loginHideDefaultPasswordHint,
+          hideBrandFooter,
+          footerText,
+        })
+        if (typeof document !== 'undefined') {
+          document.title = branding.formatPageTitle('Login')
+        }
         // The form only exists once hasPassword has left null, so focus it as
         // soon as the state that reveals it has been applied.
         tick().then(focusPasswordField)
@@ -175,7 +215,15 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-bg p-4 relative overflow-hidden">
-  <div class="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true"></div>
+  {#if loginBgUrl}
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
+      style:background-image="url({loginBgUrl})"
+    ></div>
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" aria-hidden="true"></div>
+  {:else}
+    <div class="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true"></div>
+  {/if}
 
   <div class="relative z-10 w-full max-w-md">
     {#if hasPassword === null}
@@ -185,12 +233,23 @@
       </div>
     {:else}
       <div class="text-center mb-8 flex flex-col items-center">
-        <div class="size-14 rounded-2xl bg-surface border border-border-subtle shadow-[var(--shadow-warm)] flex items-center justify-center p-2.5 mb-4">
-          <img src="/favicon.svg" alt="9router-go" class="w-full h-full object-contain" />
+        <div class="size-14 rounded-2xl {loginBgBlur ? 'bg-surface/80 backdrop-blur-md border border-white/20' : 'bg-surface border border-border-subtle shadow-[var(--shadow-warm)]'} flex items-center justify-center p-2.5 mb-4 overflow-hidden">
+          <img
+            src={appLogoUrl || faviconUrl || '/favicon.svg'}
+            alt={appName || '9router-go'}
+            class="w-full h-full object-contain"
+            onerror={(e) => {
+              ;(e.currentTarget as HTMLImageElement).src = '/favicon.svg'
+            }}
+          />
         </div>
-        <h1 class="text-3xl font-bold text-primary mb-2">9router-go</h1>
+        <h1 class="text-3xl font-bold text-primary mb-2 tracking-tight">
+          {loginTitle || appName || '9router-go'}
+        </h1>
         <p class="text-text-muted">
-          {#if samlAvailable}
+          {#if loginSubtitle}
+            {loginSubtitle}
+          {:else if samlAvailable}
             Sign in with SAML 2.0 Single Sign-On
           {:else if oidcAvailable}
             Sign in with your OIDC provider to access the dashboard
@@ -200,7 +259,7 @@
         </p>
       </div>
 
-      <div class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] p-6">
+      <div class="{loginBgBlur ? 'bg-surface/85 backdrop-blur-xl border border-white/15 shadow-2xl' : 'bg-surface border border-border-subtle shadow-[var(--shadow-soft)]'} rounded-[14px] p-6 transition-all">
         {#if mustChange}
           <form onsubmit={handleSetNewPassword} class="flex flex-col gap-4">
             <p class="text-sm text-amber-600 dark:text-amber-400 text-center">
@@ -325,9 +384,11 @@
                   {/if}
                 </button>
 
-                <p class="text-xs text-center text-text-muted mt-2">
-                  Default password is <code class="bg-surface-2 px-1.5 py-0.5 rounded text-text-main font-mono">123456</code>
-                </p>
+                {#if !loginHideDefaultPasswordHint}
+                  <p class="text-xs text-center text-text-muted mt-2">
+                    Default password is <code class="bg-surface-2 px-1.5 py-0.5 rounded text-text-main font-mono">123456</code>
+                  </p>
+                {/if}
                 {#if hasPassword === false}
                   <p class="text-xs text-center text-amber-600 dark:text-amber-400">
                     Security risk: no password set. You will be asked to set one when logging in remotely.
@@ -340,6 +401,12 @@
           </div>
         {/if}
       </div>
+
+      {#if footerText}
+        <p class="text-xs text-center text-text-muted/70 mt-6">{footerText}</p>
+      {:else if !hideBrandFooter}
+        <p class="text-xs text-center text-text-muted/40 mt-6">Powered by 9router-go</p>
+      {/if}
     {/if}
   </div>
 </div>

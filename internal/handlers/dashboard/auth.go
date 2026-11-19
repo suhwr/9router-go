@@ -157,9 +157,20 @@ func (h *DashboardHandler) HandleAuthStatus(w http.ResponseWriter, r *http.Reque
 		"oidcName":       oidcName,
 		"oidcEmail":      oidcEmail,
 		"oidcLogin":      oidcLogin,
-		"samlName":       samlName,
-		"samlEmail":      samlEmail,
-		"samlLogin":      samlLogin,
+		"samlName":                     samlName,
+		"samlEmail":                    samlEmail,
+		"samlLogin":                    samlLogin,
+		"appName":                      stringOr(raw, "appName", ""),
+		"appSubtitle":                  stringOr(raw, "appSubtitle", ""),
+		"appLogoUrl":                   stringOr(raw, "appLogoUrl", ""),
+		"faviconUrl":                   stringOr(raw, "faviconUrl", ""),
+		"loginTitle":                   stringOr(raw, "loginTitle", ""),
+		"loginSubtitle":                stringOr(raw, "loginSubtitle", ""),
+		"loginBgUrl":                   stringOr(raw, "loginBgUrl", ""),
+		"loginBgBlur":                  boolOr(raw, "loginBgBlur", false),
+		"loginHideDefaultPasswordHint": boolOr(raw, "loginHideDefaultPasswordHint", false),
+		"hideBrandFooter":              boolOr(raw, "hideBrandFooter", false),
+		"footerText":                   stringOr(raw, "footerText", ""),
 	})
 }
 
@@ -199,6 +210,13 @@ func hasStoredPassword(raw map[string]any) bool {
 
 func stringOr(m map[string]any, key, fallback string) string {
 	if v, ok := m[key].(string); ok && v != "" {
+		return v
+	}
+	return fallback
+}
+
+func boolOr(m map[string]any, key string, fallback bool) bool {
+	if v, ok := m[key].(bool); ok {
 		return v
 	}
 	return fallback

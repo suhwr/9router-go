@@ -20,6 +20,7 @@
   import Modal from '../lib/ui/Modal.svelte'
   import Button from '../lib/ui/Button.svelte'
   import Input from '../lib/ui/Input.svelte'
+  import { branding } from '../lib/branding.svelte'
   import { api, getAuthHeaders, responseErrorMessage, type DatabaseStats, type Settings } from '../api/client'
   import { isCompactUnitsEnabled, isProviderTogglePersistent, setCompactUnits, setProviderTogglePersistent } from '../lib/compactNumber'
   import {
@@ -109,10 +110,28 @@
   let systemPromptPrefix = $state('')
   let systemPromptSuffix = $state('')
   let appName = $state('')
+  let appSubtitle = $state('')
   let appLogoUrl = $state('')
+  let faviconUrl = $state('')
+  let loginTitle = $state('')
+  let loginSubtitle = $state('')
+  let loginBgUrl = $state('')
+  let loginBgBlur = $state(false)
+  let loginHideDefaultPasswordHint = $state(false)
+  let hideBrandFooter = $state(false)
+  let footerText = $state('')
+
   let isUploadingLogo = $state(false)
   let logoUploadError = $state('')
   let logoFileInput = $state<HTMLInputElement | null>(null)
+
+  let isUploadingFavicon = $state(false)
+  let faviconUploadError = $state('')
+  let faviconFileInput = $state<HTMLInputElement | null>(null)
+
+  let isUploadingBg = $state(false)
+  let bgUploadError = $state('')
+  let bgFileInput = $state<HTMLInputElement | null>(null)
 
   const ANTI_POISONING_PRESET =
     '[CRITICAL CODE INTEGRITY & ANTI-POISONING RULE]\n' +
@@ -360,7 +379,17 @@
         if (typeof s.systemPromptPrefix === 'string') systemPromptPrefix = s.systemPromptPrefix
         if (typeof s.systemPromptSuffix === 'string') systemPromptSuffix = s.systemPromptSuffix
         if (typeof s.appName === 'string') appName = s.appName
+        if (typeof s.appSubtitle === 'string') appSubtitle = s.appSubtitle
         if (typeof s.appLogoUrl === 'string') appLogoUrl = s.appLogoUrl
+        if (typeof s.faviconUrl === 'string') faviconUrl = s.faviconUrl
+        if (typeof s.loginTitle === 'string') loginTitle = s.loginTitle
+        if (typeof s.loginSubtitle === 'string') loginSubtitle = s.loginSubtitle
+        if (typeof s.loginBgUrl === 'string') loginBgUrl = s.loginBgUrl
+        if (typeof s.loginBgBlur === 'boolean') loginBgBlur = s.loginBgBlur
+        if (typeof s.loginHideDefaultPasswordHint === 'boolean') loginHideDefaultPasswordHint = s.loginHideDefaultPasswordHint
+        if (typeof s.hideBrandFooter === 'boolean') hideBrandFooter = s.hideBrandFooter
+        if (typeof s.footerText === 'string') footerText = s.footerText
+        branding.setBranding(s)
 
         if (s.authMode === 'oidc' || s.authMode === 'saml') authMode = s.authMode
         if (s.oidcIssuerUrl) oidcIssuerUrl = String(s.oidcIssuerUrl)
@@ -491,27 +520,56 @@
   /** Uploads the white-label logo and adopts the URL the gateway stored it
       under. The upload writes appLogoUrl on the server, so the field is
       refreshed from the response rather than guessed here. */
-  async function uploadLogoFile(file: File) {
-    isUploadingLogo = true
-    logoUploadError = ''
+  async function uploadAssetFile(file: File, target: 'logo' | 'favicon' | 'background') {
+    if (target === 'logo') {
+      isUploadingLogo = true
+      logoUploadError = ''
+    } else if (target === 'favicon') {
+      isUploadingFavicon = true
+      faviconUploadError = ''
+    } else if (target === 'background') {
+      isUploadingBg = true
+      bgUploadError = ''
+    }
+
     try {
-      const res = await api.uploadLogo(file)
-      appLogoUrl = res.appLogoUrl
+      const res = await api.uploadBrandAsset(file, target)
+      if (target === 'logo') {
+        appLogoUrl = res.url || res.appLogoUrl || ''
+        branding.setBranding({ appLogoUrl })
+      } else if (target === 'favicon') {
+        faviconUrl = res.url || res.faviconUrl || ''
+        branding.setBranding({ faviconUrl })
+      } else if (target === 'background') {
+        loginBgUrl = res.url || res.loginBgUrl || ''
+        branding.setBranding({ loginBgUrl })
+      }
       onRefresh?.()
     } catch (err) {
-      logoUploadError = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (target === 'logo') logoUploadError = msg
+      else if (target === 'favicon') faviconUploadError = msg
+      else if (target === 'background') bgUploadError = msg
     } finally {
-      isUploadingLogo = false
+      if (target === 'logo') isUploadingLogo = false
+      else if (target === 'favicon') isUploadingFavicon = false
+      else if (target === 'background') isUploadingBg = false
     }
   }
-  /** Reads the picked file off the input and clears it afterwards, so choosing
-      the same file twice in a row fires change again. The File is captured
-      before the reset: clearing the input drops its files list. */
-  function handleLogoFileSelected(e: Event) {
+
+  function handleAssetFileSelected(e: Event, target: 'logo' | 'favicon' | 'background') {
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
     input.value = ''
-    if (file) uploadLogoFile(file)
+    if (file) uploadAssetFile(file, target)
+  }
+
+  function uploadLogoFile(file: File) {
+    return uploadAssetFile(file, 'logo')
+  }
+
+  function handleLogoFileSelected(e: Event) {
+    handleAssetFileSelected(e, 'logo')
   }
   async function handleSaveAll() {
     isSavingSettings = true
@@ -533,7 +591,16 @@
         systemPromptPrefix,
         systemPromptSuffix,
         appName: appName.trim(),
+        appSubtitle: appSubtitle.trim(),
         appLogoUrl: appLogoUrl.trim(),
+        faviconUrl: faviconUrl.trim(),
+        loginTitle: loginTitle.trim(),
+        loginSubtitle: loginSubtitle.trim(),
+        loginBgUrl: loginBgUrl.trim(),
+        loginBgBlur,
+        loginHideDefaultPasswordHint,
+        hideBrandFooter,
+        footerText: footerText.trim(),
         authMode,
         oidcIssuerUrl,
         oidcClientId,
@@ -545,6 +612,19 @@
         samlCert,
         samlLoginLabel,
         displayCurrency: currencySetting(),
+      })
+      branding.setBranding({
+        appName: appName.trim(),
+        appSubtitle: appSubtitle.trim(),
+        appLogoUrl: appLogoUrl.trim(),
+        faviconUrl: faviconUrl.trim(),
+        loginTitle: loginTitle.trim(),
+        loginSubtitle: loginSubtitle.trim(),
+        loginBgUrl: loginBgUrl.trim(),
+        loginBgBlur,
+        loginHideDefaultPasswordHint,
+        hideBrandFooter,
+        footerText: footerText.trim(),
       })
       // The arrangement is a localStorage preference, so it is written only once
       // the settings it was edited alongside have been kept.
@@ -1362,58 +1442,273 @@
         </div>
       </div>
     </Card>
-    <!-- SECTION: White-label branding. The sidebar renders these two values, so
-         the card is the only place the product name and logo are set. An empty
-         value falls back to the project defaults, which is what an operator who
-         never opens this card keeps. -->
-    <Card padding="md" class="space-y-4">
-      <div class="flex items-center gap-2 pb-2 border-b border-border">
-        <Sliders class="w-4 h-4 text-brand-500" />
-        <h2 class="text-sm font-bold text-text-main">White-label branding</h2>
-      </div>
-      <p class="text-xs text-text-muted">
-        Customize the name and logo shown in the dashboard sidebar. Leave blank to use the 9router-go defaults.
-      </p>
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-text-main">Application name</span>
-        <Input bind:value={appName} placeholder="9router-go" />
-      </label>
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-text-main">Logo URL</span>
-        <Input bind:value={appLogoUrl} placeholder="https://example.com/logo.png" />
-        <span class="text-[11px] text-text-subtle">An HTTPS URL, or a local absolute path such as /logo.png</span>
-      </label>
-      <!-- Upload writes the file into the gateway's own data directory and
-           rewrites the URL above, so an operator with no public host still
-           gets a branded sidebar: the <img> points at this gateway. -->
-      <div class="flex items-center gap-2">
-        <input
-          type="file"
-          accept=".png,.svg,.webp,.jpg,.jpeg,image/png,image/svg+xml,image/webp,image/jpeg"
-          bind:this={logoFileInput}
-          onchange={handleLogoFileSelected}
-          class="hidden"
-        />
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-main transition-colors hover:border-brand-500/40 disabled:opacity-50"
-          disabled={isUploadingLogo}
-          onclick={() => logoFileInput?.click()}
-        >
-          <Upload class="h-3.5 w-3.5" />
-          {isUploadingLogo ? 'Uploading…' : 'Upload image'}
-        </button>
-        <span class="text-[11px] text-text-subtle">PNG, SVG, WebP or JPEG · max 2 MB</span>
-      </div>
-      {#if logoUploadError}
-        <p class="text-[11px] font-medium text-error">{logoUploadError}</p>
-      {/if}
-      {#if appLogoUrl}
-        <div class="flex items-center gap-3 rounded-lg bg-surface-2 p-3">
-          <img src={appLogoUrl} alt="Logo preview" class="h-10 w-10 rounded object-contain" />
-          <span class="text-xs text-text-muted">Preview</span>
+    <!-- SECTION: Rebranding & White-Labeling. Configure full brand identity,
+         favicon, stealth settings, and login screen customization. -->
+    <Card padding="md" class="space-y-6">
+      <div class="flex items-center justify-between pb-3 border-b border-border">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-brand-500 text-lg">palette</span>
+          <div>
+            <h2 class="text-sm font-bold text-text-main">Rebranding & White-Labeling</h2>
+            <p class="text-xs text-text-muted">Customize brand identity, favicon, stealth attribution, and login screen interface</p>
+          </div>
         </div>
-      {/if}
+      </div>
+
+      <!-- 1. Brand Identity -->
+      <div class="space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-text-subtle flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-brand-500">badge</span>
+          Brand Identity
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-text-main">Application Name</span>
+            <Input bind:value={appName} placeholder="9router-go" />
+            <span class="text-[11px] text-text-subtle">Displayed in sidebar, title bar, and browser tab</span>
+          </label>
+
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-text-main">Brand Subtitle / Tagline</span>
+            <Input bind:value={appSubtitle} placeholder="AI Gateway Platform" />
+            <span class="text-[11px] text-text-subtle">Displayed directly under the brand name in the sidebar</span>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Logo Asset -->
+          <div class="space-y-2 p-3 rounded-xl bg-surface-2/60 border border-border-subtle">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-text-main flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sm text-text-muted">image</span>
+                Brand Logo
+              </span>
+              {#if appLogoUrl}
+                <button
+                  type="button"
+                  class="text-[11px] text-error hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  onclick={() => { appLogoUrl = '' }}
+                >
+                  <span class="material-symbols-outlined text-xs">close</span>
+                  Remove
+                </button>
+              {/if}
+            </div>
+            <Input bind:value={appLogoUrl} placeholder="https://example.com/logo.png" />
+            <div class="flex items-center gap-2 pt-1">
+              <input
+                type="file"
+                accept=".png,.svg,.webp,.jpg,.jpeg,image/png,image/svg+xml,image/webp,image/jpeg"
+                bind:this={logoFileInput}
+                onchange={(e) => handleAssetFileSelected(e, 'logo')}
+                class="hidden"
+              />
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1.5 text-xs font-medium text-text-main transition-colors hover:border-brand-500/40 disabled:opacity-50 cursor-pointer"
+                disabled={isUploadingLogo}
+                onclick={() => logoFileInput?.click()}
+              >
+                <Upload class="h-3.5 w-3.5" />
+                {isUploadingLogo ? 'Uploading…' : 'Upload Logo'}
+              </button>
+              <span class="text-[11px] text-text-subtle">PNG, SVG, WebP, JPG · max 2 MB</span>
+            </div>
+            {#if logoUploadError}
+              <p class="text-[11px] font-medium text-error">{logoUploadError}</p>
+            {/if}
+            {#if appLogoUrl}
+              <div class="flex items-center gap-3 rounded-lg bg-surface p-2 border border-border-subtle">
+                <img src={appLogoUrl} alt="Logo preview" class="h-8 w-8 rounded object-contain" />
+                <span class="text-xs text-text-muted truncate font-mono text-[11px]">{appLogoUrl}</span>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Favicon Asset -->
+          <div class="space-y-2 p-3 rounded-xl bg-surface-2/60 border border-border-subtle">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-text-main flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sm text-text-muted">tab</span>
+                Browser Favicon
+              </span>
+              {#if faviconUrl}
+                <button
+                  type="button"
+                  class="text-[11px] text-error hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  onclick={() => { faviconUrl = '' }}
+                >
+                  <span class="material-symbols-outlined text-xs">close</span>
+                  Remove
+                </button>
+              {/if}
+            </div>
+            <Input bind:value={faviconUrl} placeholder="/favicon.ico or https://.../favicon.png" />
+            <div class="flex items-center gap-2 pt-1">
+              <input
+                type="file"
+                accept=".ico,.png,.svg,.webp,image/x-icon,image/png,image/svg+xml,image/webp"
+                bind:this={faviconFileInput}
+                onchange={(e) => handleAssetFileSelected(e, 'favicon')}
+                class="hidden"
+              />
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1.5 text-xs font-medium text-text-main transition-colors hover:border-brand-500/40 disabled:opacity-50 cursor-pointer"
+                disabled={isUploadingFavicon}
+                onclick={() => faviconFileInput?.click()}
+              >
+                <Upload class="h-3.5 w-3.5" />
+                {isUploadingFavicon ? 'Uploading…' : 'Upload Favicon'}
+              </button>
+              <span class="text-[11px] text-text-subtle">ICO, PNG, SVG · max 2 MB</span>
+            </div>
+            {#if faviconUploadError}
+              <p class="text-[11px] font-medium text-error">{faviconUploadError}</p>
+            {/if}
+            {#if faviconUrl}
+              <div class="flex items-center gap-3 rounded-lg bg-surface p-2 border border-border-subtle">
+                <img src={faviconUrl} alt="Favicon preview" class="h-6 w-6 rounded object-contain" />
+                <span class="text-xs text-text-muted truncate font-mono text-[11px]">{faviconUrl}</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Login Page Customization (/login) -->
+      <div class="space-y-4 pt-2 border-t border-border-subtle">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-text-subtle flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-brand-500">lock</span>
+          Login Screen Interface (/login)
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-text-main">Login Card Title</span>
+            <Input bind:value={loginTitle} placeholder="Sign In" />
+            <span class="text-[11px] text-text-subtle">Defaults to Application Name if empty</span>
+          </label>
+
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-text-main">Login Subtitle</span>
+            <Input bind:value={loginSubtitle} placeholder="Enter your master password to continue" />
+            <span class="text-[11px] text-text-subtle">Custom welcome prompt under the title</span>
+          </label>
+        </div>
+
+        <!-- Login Background Asset -->
+        <div class="space-y-2 p-3 rounded-xl bg-surface-2/60 border border-border-subtle">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-text-main flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-sm text-text-muted">wallpaper</span>
+              Login Background Image
+            </span>
+            {#if loginBgUrl}
+              <button
+                type="button"
+                class="text-[11px] text-error hover:underline inline-flex items-center gap-1 cursor-pointer"
+                onclick={() => { loginBgUrl = '' }}
+              >
+                <span class="material-symbols-outlined text-xs">close</span>
+                Remove
+              </button>
+            {/if}
+          </div>
+          <Input bind:value={loginBgUrl} placeholder="https://example.com/wallpaper.jpg or /uploads/login-bg.jpg" />
+          <div class="flex items-center gap-2 pt-1">
+            <input
+              type="file"
+              accept=".png,.webp,.jpg,.jpeg,image/png,image/webp,image/jpeg"
+              bind:this={bgFileInput}
+              onchange={(e) => handleAssetFileSelected(e, 'background')}
+              class="hidden"
+            />
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1.5 text-xs font-medium text-text-main transition-colors hover:border-brand-500/40 disabled:opacity-50 cursor-pointer"
+              disabled={isUploadingBg}
+              onclick={() => bgFileInput?.click()}
+            >
+              <Upload class="h-3.5 w-3.5" />
+              {isUploadingBg ? 'Uploading…' : 'Upload Wallpaper'}
+            </button>
+            <span class="text-[11px] text-text-subtle">JPG, PNG, WebP · max 2 MB</span>
+          </div>
+          {#if bgUploadError}
+            <p class="text-[11px] font-medium text-error">{bgUploadError}</p>
+          {/if}
+          {#if loginBgUrl}
+            <div class="relative w-full h-24 rounded-lg overflow-hidden border border-border-subtle bg-surface flex items-center justify-center">
+              <img src={loginBgUrl} alt="Background preview" class="w-full h-full object-cover" />
+              <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <span class="text-xs text-white font-medium px-2 py-1 rounded bg-black/50 backdrop-blur-sm">Wallpaper Preview</span>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Login Card Options -->
+        <div class="space-y-3 pt-1">
+          <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-surface-2/40 border border-border-subtle">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-text-main">Glassmorphism Card Effect</p>
+              <p class="text-[11px] text-text-subtle">Adds frosted glass blur effect (backdrop-blur-xl) over background</p>
+            </div>
+            <Toggle
+              checked={loginBgBlur}
+              size="sm"
+              label="Glassmorphism blur"
+              onChange={(val: boolean) => { loginBgBlur = val }}
+            />
+          </div>
+
+          <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-surface-2/40 border border-border-subtle">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-text-main">Hide Default Password Hint</p>
+              <p class="text-[11px] text-text-subtle">Hides "Default password is 123456" prompt on login form for stealth</p>
+            </div>
+            <Toggle
+              checked={loginHideDefaultPasswordHint}
+              size="sm"
+              label="Hide default password hint"
+              onChange={(val: boolean) => { loginHideDefaultPasswordHint = val }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Attribution & Footers -->
+      <div class="space-y-4 pt-2 border-t border-border-subtle">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-text-subtle flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-brand-500">visibility_off</span>
+          Attribution & Stealth
+        </h3>
+
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-surface-2/40 border border-border-subtle">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-text-main">Hide 9router Footers & Version Information</p>
+              <p class="text-[11px] text-text-subtle">
+                Suppresses 9router-go version tag, update banners, and project attribution across dashboard and login
+              </p>
+            </div>
+            <Toggle
+              checked={hideBrandFooter}
+              size="sm"
+              label="Hide brand footer"
+              onChange={(val: boolean) => { hideBrandFooter = val }}
+            />
+          </div>
+
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-text-main">Custom Footer Copyright / Notice</span>
+            <Input bind:value={footerText} placeholder="© 2026 AI Gateway. All rights reserved." />
+            <span class="text-[11px] text-text-subtle">Replaces default "Powered by 9router-go" footer with your custom text</span>
+          </label>
+        </div>
+      </div>
     </Card>
     <!-- SECTION: Display. Unit abbreviation, the usage-detail default, an
          advanced-settings disclosure that unfolds the currency rates, the

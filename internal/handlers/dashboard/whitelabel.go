@@ -10,8 +10,17 @@ import (
 // sidebar renders whatever they hold, so the stored shape is kept honest here
 // rather than trusted from the client.
 const (
-	appNameSettingKey    = "appName"
-	appLogoUrlSettingKey = "appLogoUrl"
+	appNameSettingKey              = "appName"
+	appSubtitleSettingKey          = "appSubtitle"
+	appLogoUrlSettingKey           = "appLogoUrl"
+	faviconUrlSettingKey           = "faviconUrl"
+	loginTitleSettingKey           = "loginTitle"
+	loginSubtitleSettingKey        = "loginSubtitle"
+	loginBgUrlSettingKey           = "loginBgUrl"
+	loginBgBlurSettingKey          = "loginBgBlur"
+	loginHideDefaultPasswordKey    = "loginHideDefaultPasswordHint"
+	hideBrandFooterSettingKey      = "hideBrandFooter"
+	footerTextSettingKey           = "footerText"
 )
 
 // maxAppNameRunes caps the stored product name. The sidebar renders it inside a
@@ -74,13 +83,26 @@ func normalizeAppLogoUrl(value any) (string, bool) {
 	return logo, true
 }
 
-// applyWhitelabelUpdate normalizes the two branding keys in
-// HandleUpdateSettings' payload.
-//
-// An unparsable value is stored as an explicit null rather than deleted:
-// UpdateSettingsRaw merges into the stored row, so dropping the map entry would
-// leave the previous name or logo in place and the sidebar would keep showing
-// the branding the operator just tried to clear.
+func normalizeGenericText(value any, maxRunes int) (string, bool) {
+	s, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	s = strings.TrimSpace(s)
+	if len([]rune(s)) > maxRunes {
+		s = string([]rune(s)[:maxRunes])
+	}
+	return s, true
+}
+
+func normalizeBoolVal(value any) (bool, bool) {
+	if b, ok := value.(bool); ok {
+		return b, true
+	}
+	return false, false
+}
+
+// applyWhitelabelUpdate normalizes branding keys in HandleUpdateSettings' payload.
 func applyWhitelabelUpdate(updates map[string]any) {
 	if value, ok := updates[appNameSettingKey]; ok {
 		name, valid := normalizeAppName(value)
@@ -88,6 +110,14 @@ func applyWhitelabelUpdate(updates map[string]any) {
 			updates[appNameSettingKey] = nil
 		} else {
 			updates[appNameSettingKey] = name
+		}
+	}
+	if value, ok := updates[appSubtitleSettingKey]; ok {
+		sub, valid := normalizeGenericText(value, 100)
+		if !valid {
+			updates[appSubtitleSettingKey] = nil
+		} else {
+			updates[appSubtitleSettingKey] = sub
 		}
 	}
 	if value, ok := updates[appLogoUrlSettingKey]; ok {
@@ -98,12 +128,70 @@ func applyWhitelabelUpdate(updates map[string]any) {
 			updates[appLogoUrlSettingKey] = logo
 		}
 	}
+	if value, ok := updates[faviconUrlSettingKey]; ok {
+		fav, valid := normalizeAppLogoUrl(value)
+		if !valid {
+			updates[faviconUrlSettingKey] = nil
+		} else {
+			updates[faviconUrlSettingKey] = fav
+		}
+	}
+	if value, ok := updates[loginTitleSettingKey]; ok {
+		title, valid := normalizeGenericText(value, 60)
+		if !valid {
+			updates[loginTitleSettingKey] = nil
+		} else {
+			updates[loginTitleSettingKey] = title
+		}
+	}
+	if value, ok := updates[loginSubtitleSettingKey]; ok {
+		sub, valid := normalizeGenericText(value, 160)
+		if !valid {
+			updates[loginSubtitleSettingKey] = nil
+		} else {
+			updates[loginSubtitleSettingKey] = sub
+		}
+	}
+	if value, ok := updates[loginBgUrlSettingKey]; ok {
+		bg, valid := normalizeAppLogoUrl(value)
+		if !valid {
+			updates[loginBgUrlSettingKey] = nil
+		} else {
+			updates[loginBgUrlSettingKey] = bg
+		}
+	}
+	if value, ok := updates[loginBgBlurSettingKey]; ok {
+		if b, valid := normalizeBoolVal(value); valid {
+			updates[loginBgBlurSettingKey] = b
+		} else {
+			updates[loginBgBlurSettingKey] = nil
+		}
+	}
+	if value, ok := updates[loginHideDefaultPasswordKey]; ok {
+		if b, valid := normalizeBoolVal(value); valid {
+			updates[loginHideDefaultPasswordKey] = b
+		} else {
+			updates[loginHideDefaultPasswordKey] = nil
+		}
+	}
+	if value, ok := updates[hideBrandFooterSettingKey]; ok {
+		if b, valid := normalizeBoolVal(value); valid {
+			updates[hideBrandFooterSettingKey] = b
+		} else {
+			updates[hideBrandFooterSettingKey] = nil
+		}
+	}
+	if value, ok := updates[footerTextSettingKey]; ok {
+		txt, valid := normalizeGenericText(value, 160)
+		if !valid {
+			updates[footerTextSettingKey] = nil
+		} else {
+			updates[footerTextSettingKey] = txt
+		}
+	}
 }
 
-// sanitizeWhitelabel re-reads the stored values through the same normalizers, so
-// a row written by an older build (or by hand) reaches the dashboard in the
-// shape the sidebar expects. A value that normalizes to nothing is dropped
-// rather than sent as a logo URL the client would have to reject again.
+// sanitizeWhitelabel re-reads the stored values through the same normalizers.
 func sanitizeWhitelabel(settings map[string]any) {
 	if value, ok := settings[appNameSettingKey]; ok {
 		name, valid := normalizeAppName(value)
@@ -113,12 +201,81 @@ func sanitizeWhitelabel(settings map[string]any) {
 			settings[appNameSettingKey] = name
 		}
 	}
+	if value, ok := settings[appSubtitleSettingKey]; ok {
+		sub, valid := normalizeGenericText(value, 100)
+		if !valid || sub == "" {
+			delete(settings, appSubtitleSettingKey)
+		} else {
+			settings[appSubtitleSettingKey] = sub
+		}
+	}
 	if value, ok := settings[appLogoUrlSettingKey]; ok {
 		logo, valid := normalizeAppLogoUrl(value)
 		if !valid || logo == "" {
 			delete(settings, appLogoUrlSettingKey)
 		} else {
 			settings[appLogoUrlSettingKey] = logo
+		}
+	}
+	if value, ok := settings[faviconUrlSettingKey]; ok {
+		fav, valid := normalizeAppLogoUrl(value)
+		if !valid || fav == "" {
+			delete(settings, faviconUrlSettingKey)
+		} else {
+			settings[faviconUrlSettingKey] = fav
+		}
+	}
+	if value, ok := settings[loginTitleSettingKey]; ok {
+		title, valid := normalizeGenericText(value, 60)
+		if !valid || title == "" {
+			delete(settings, loginTitleSettingKey)
+		} else {
+			settings[loginTitleSettingKey] = title
+		}
+	}
+	if value, ok := settings[loginSubtitleSettingKey]; ok {
+		sub, valid := normalizeGenericText(value, 160)
+		if !valid || sub == "" {
+			delete(settings, loginSubtitleSettingKey)
+		} else {
+			settings[loginSubtitleSettingKey] = sub
+		}
+	}
+	if value, ok := settings[loginBgUrlSettingKey]; ok {
+		bg, valid := normalizeAppLogoUrl(value)
+		if !valid || bg == "" {
+			delete(settings, loginBgUrlSettingKey)
+		} else {
+			settings[loginBgUrlSettingKey] = bg
+		}
+	}
+	if value, ok := settings[loginBgBlurSettingKey]; ok {
+		if b, valid := normalizeBoolVal(value); !valid {
+			delete(settings, loginBgBlurSettingKey)
+		} else {
+			settings[loginBgBlurSettingKey] = b
+		}
+	}
+	if value, ok := settings[loginHideDefaultPasswordKey]; ok {
+		if b, valid := normalizeBoolVal(value); !valid {
+			delete(settings, loginHideDefaultPasswordKey)
+		} else {
+			settings[loginHideDefaultPasswordKey] = b
+		}
+	}
+	if value, ok := settings[hideBrandFooterSettingKey]; ok {
+		if b, valid := normalizeBoolVal(value); !valid {
+			delete(settings, hideBrandFooterSettingKey)
+		} else {
+			settings[hideBrandFooterSettingKey] = b
+		}
+	}
+	if value, ok := settings[footerTextSettingKey]; ok {
+		txt, valid := normalizeGenericText(value, 160)
+		if !valid || txt == "" {
+			delete(settings, footerTextSettingKey)
+		} else {
+			settings[footerTextSettingKey] = txt
 		}
 	}
 }

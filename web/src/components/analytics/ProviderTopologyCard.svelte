@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { branding } from '../../lib/branding.svelte'
   import type { ActiveRequestItem } from './types'
   import ProviderArtwork from '../providers/ProviderArtwork.svelte'
 
@@ -390,14 +391,17 @@
       style="left: 0px; top: 0px; transform: translate(-50%, -50%);"
     >
       <img
-        src="/favicon.svg"
-        alt="9router-go"
+        src={branding.config.appLogoUrl || branding.config.faviconUrl || '/favicon.svg'}
+        alt={branding.config.appName || 'Gateway'}
         class="w-6 h-6 mr-2 object-contain {activeCount > 0 ? 'topology-router-icon' : ''}"
         loading="lazy"
         decoding="async"
+        onerror={(e) => {
+          ;(e.currentTarget as HTMLImageElement).src = '/favicon.svg'
+        }}
       />
       <span class="text-sm font-bold {activeCount > 0 ? 'topology-router-label text-yellow-300' : 'text-primary'}">
-        9router-go
+        {branding.config.appName || 'Gateway'}
       </span>
       {#if activeCount > 0}
         <span class="ml-2 px-1.5 py-0.5 rounded-full bg-yellow-400 text-black text-xs font-bold topology-router-badge">

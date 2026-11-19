@@ -309,7 +309,16 @@ export interface ProviderStrategyConfig {
 
 export interface Settings {
   appName?: string
+  appSubtitle?: string
   appLogoUrl?: string
+  faviconUrl?: string
+  loginTitle?: string
+  loginSubtitle?: string
+  loginBgUrl?: string
+  loginBgBlur?: boolean
+  loginHideDefaultPasswordHint?: boolean
+  hideBrandFooter?: boolean
+  footerText?: string
   requireApiKey?: boolean
   tunnelDashboardAccess?: boolean
   tunnelWatchdogEnabled?: boolean
@@ -2351,11 +2360,15 @@ export const api = {
    * set `application/json` here would override it and leave the server
    * parsing a multipart body as JSON.
    */
-  uploadLogo: async (file: File): Promise<{ status: string; appLogoUrl: string }> => {
+  uploadBrandAsset: async (
+    file: File,
+    target: 'logo' | 'favicon' | 'background' = 'logo'
+  ): Promise<{ status: string; url: string; appLogoUrl?: string; faviconUrl?: string; loginBgUrl?: string }> => {
     const token = getStoredAPIKey()
     const body = new FormData()
     body.append('file', file)
-    const res = await fetch('/api/settings/logo', {
+    body.append('target', target)
+    const res = await fetch(`/api/settings/logo?target=${target}`, {
       method: 'POST',
       ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
       body,
@@ -2363,6 +2376,10 @@ export const api = {
     if (res.status === 401) handleUnauthorized('/api/settings/logo')
     if (!res.ok) throw new ApiError(await responseErrorMessage(res), res.status)
     return res.json()
+  },
+  uploadLogo: async (file: File): Promise<{ status: string; appLogoUrl: string }> => {
+    const res = await api.uploadBrandAsset(file, 'logo')
+    return { status: res.status, appLogoUrl: res.url || res.appLogoUrl || '' }
   },
   checkUpdate: () => request<SystemVersionInfo>('/api/version/check'),
   triggerUpdate: () =>

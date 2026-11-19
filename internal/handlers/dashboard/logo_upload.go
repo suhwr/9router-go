@@ -42,6 +42,25 @@ var logoExtensions = map[string]string{
 	".webp": "image/webp",
 	".jpg":  "image/jpeg",
 	".jpeg": "image/jpeg",
+	".ico":  "image/x-icon",
+}
+
+var allowedAssetPrefixes = map[string]bool{
+	"logo":     true,
+	"favicon":  true,
+	"login-bg": true,
+}
+
+// targetFileName resolves the asset filename on disk for a given target.
+func targetFileName(target, ext string) string {
+	switch target {
+	case "favicon":
+		return "favicon" + ext
+	case "background":
+		return "login-bg" + ext
+	default:
+		return "logo" + ext
+	}
 }
 
 // logoDir returns the directory holding the uploaded logo, creating it on
@@ -91,14 +110,22 @@ func (h *DashboardHandler) HandleUploadLogo(w http.ResponseWriter, r *http.Reque
 	}
 	defer func() { _ = file.Close() }()
 
+	target := strings.ToLower(strings.TrimSpace(r.FormValue("target")))
+	if target == "" {
+		target = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("target")))
+	}
+	if target != "favicon" && target != "background" {
+		target = "logo"
+	}
+
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	mediaType, ok := logoExtensions[ext]
 	if !ok {
-		handlerutil.WriteJSONError(w, http.StatusBadRequest, "logo must be a PNG, SVG, WebP or JPEG image")
+		handlerutil.WriteJSONError(w, http.StatusBadRequest, "asset must be a PNG, SVG, WebP, JPEG, or ICO image")
 		return
 	}
 	if header.Size > logoMaxBytes {
-		handlerutil.WriteJSONError(w, http.StatusBadRequest, "logo must be 2 MB or smaller")
+		handlerutil.WriteJSONError(w, http.StatusBadRequest, "asset must be 2 MB or smaller")
 		return
 	}
 
@@ -107,24 +134,18 @@ func (h *DashboardHandler) HandleUploadLogo(w http.ResponseWriter, r *http.Reque
 		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to prepare the upload directory: "+err.Error())
 		return
 	}
-	// A previous upload may have left a different extension behind, so the old
-	// asset is removed before the new one is written: the slot holds one logo,
-	// and a leftover logo.svg next to a new logo.png would be served by a URL
-	// the operator no longer chose.
 	for staleExt := range logoExtensions {
 		if staleExt == ext {
 			continue
 		}
-		_ = os.Remove(filepath.Join(dir, logoFileName(staleExt)))
+		_ = os.Remove(filepath.Join(dir, targetFileName(target, staleExt)))
 	}
 
-	// The size cap is enforced on the bytes actually read rather than on the
-	// client's declared Content-Length: a request that understates its size
-	// must not be able to write past the cap.
+	targetName := targetFileName(target, ext)
 	limited := io.LimitReader(file, logoMaxBytes+1)
-	dst, err := os.Create(filepath.Join(dir, logoFileName(ext)))
+	dst, err := os.Create(filepath.Join(dir, targetName))
 	if err != nil {
-		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to create the logo file: "+err.Error())
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to create the asset file: "+err.Error())
 		return
 	}
 	written, copyErr := func() (int64, error) {
@@ -132,27 +153,38 @@ func (h *DashboardHandler) HandleUploadLogo(w http.ResponseWriter, r *http.Reque
 		return io.Copy(dst, limited)
 	}()
 	if copyErr != nil {
-		_ = os.Remove(filepath.Join(dir, logoFileName(ext)))
-		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to write the logo file: "+copyErr.Error())
+		_ = os.Remove(filepath.Join(dir, targetName))
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to write the asset file: "+copyErr.Error())
 		return
 	}
 	if written > logoMaxBytes {
-		_ = os.Remove(filepath.Join(dir, logoFileName(ext)))
-		handlerutil.WriteJSONError(w, http.StatusBadRequest, "logo must be 2 MB or smaller")
+		_ = os.Remove(filepath.Join(dir, targetName))
+		handlerutil.WriteJSONError(w, http.StatusBadRequest, "asset must be 2 MB or smaller")
 		return
 	}
 
-	logoURL := "/" + uploadsDirName + "/" + logoFileName(ext)
-	updates := map[string]any{appLogoUrlSettingKey: logoURL}
+	assetURL := "/" + uploadsDirName + "/" + targetName
+	var updates map[string]any
+	switch target {
+	case "favicon":
+		updates = map[string]any{faviconUrlSettingKey: assetURL}
+	case "background":
+		updates = map[string]any{loginBgUrlSettingKey: assetURL}
+	default:
+		updates = map[string]any{appLogoUrlSettingKey: assetURL}
+	}
 	if err := h.Repo.UpdateSettingsRaw(updates); err != nil {
-		_ = os.Remove(filepath.Join(dir, logoFileName(ext)))
-		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to save the logo setting: "+err.Error())
+		_ = os.Remove(filepath.Join(dir, targetName))
+		handlerutil.WriteJSONError(w, http.StatusInternalServerError, "failed to save the asset setting: "+err.Error())
 		return
 	}
 
 	handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":     "ok",
-		"appLogoUrl": logoURL,
+		"url":        assetURL,
+		"appLogoUrl": assetURL,
+		"faviconUrl": assetURL,
+		"loginBgUrl": assetURL,
 		"mediaType":  mediaType,
 		"bytes":      written,
 	})
@@ -232,8 +264,9 @@ func (h *DashboardHandler) HandleServeUploads(w http.ResponseWriter, r *http.Req
 		handlerutil.WriteJSONError(w, http.StatusNotFound, "not found")
 		return
 	}
-	name := logoFileName(ext)
-	if filepath.Base(r.URL.Path) != name {
+	name := filepath.Base(r.URL.Path)
+	prefix := strings.TrimSuffix(name, ext)
+	if !allowedAssetPrefixes[prefix] {
 		handlerutil.WriteJSONError(w, http.StatusNotFound, "not found")
 		return
 	}
