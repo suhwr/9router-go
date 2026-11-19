@@ -219,15 +219,52 @@
     return { rx, ry, nodes }
   })
 
-  function fitView() {
+  let hasUserInteracted = $state(false)
+  let hasAutoFitted = false
+
+  function clampPan(x: number, y: number, currentZoom: number = zoom) {
+    const limitX = Math.max(containerWidth * 0.6, geometry.rx * currentZoom * 0.75 + 120)
+    const limitY = Math.max(containerHeight * 0.6, geometry.ry * currentZoom * 0.75 + 100)
+    return {
+      x: Math.max(-limitX, Math.min(limitX, x)),
+      y: Math.max(-limitY, Math.min(limitY, y)),
+    }
+  }
+
+  function fitView(force = false) {
     if (!containerWidth || !containerHeight) return
+    if (!force && hasUserInteracted) return
+
     const requiredWidth = 2 * geometry.rx + 240
     const requiredHeight = 2 * geometry.ry + 140
     const scaleX = (containerWidth - 36) / requiredWidth
     const scaleY = (containerHeight - 36) / requiredHeight
-    zoom = Math.min(1.0, Math.max(0.35, Math.min(scaleX, scaleY)))
+    zoom = Math.min(1.0, Math.max(0.4, Math.min(scaleX, scaleY)))
     panX = 0
     panY = 0
+  }
+
+  function handleResetView() {
+    hasUserInteracted = false
+    fitView(true)
+  }
+
+  function handleZoomIn() {
+    hasUserInteracted = true
+    const nextZoom = Math.min(2.0, zoom * 1.15)
+    const clamped = clampPan(panX, panY, nextZoom)
+    panX = clamped.x
+    panY = clamped.y
+    zoom = nextZoom
+  }
+
+  function handleZoomOut() {
+    hasUserInteracted = true
+    const nextZoom = Math.max(0.35, zoom / 1.15)
+    const clamped = clampPan(panX, panY, nextZoom)
+    panX = clamped.x
+    panY = clamped.y
+    zoom = nextZoom
   }
 
   let prevNodeCount = 0
@@ -235,21 +272,36 @@
     const count = geometry.nodes.length
     if (count !== prevNodeCount) {
       prevNodeCount = count
-      fitView()
+      if (!hasUserInteracted) {
+        fitView(false)
+      }
     }
   })
 
   function handlePointerDown(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest('button')) return
+    if (e.button !== 0) return
+    // Never start canvas drag if clicking buttons, links, or interactive node cards
+    if (
+      (e.target as HTMLElement).closest('button') ||
+      (e.target as HTMLElement).closest('[role="button"]')
+    ) {
+      return
+    }
     isDragging = true
+    hasUserInteracted = true
     dragStart = { x: e.clientX - panX, y: e.clientY - panY }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {}
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!isDragging) return
-    panX = e.clientX - dragStart.x
-    panY = e.clientY - dragStart.y
+    const rawPanX = e.clientX - dragStart.x
+    const rawPanY = e.clientY - dragStart.y
+    const clamped = clampPan(rawPanX, rawPanY, zoom)
+    panX = clamped.x
+    panY = clamped.y
   }
 
   function handlePointerUp(e: PointerEvent) {
@@ -263,8 +315,28 @@
 
   function handleWheel(e: WheelEvent) {
     e.preventDefault()
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92
-    zoom = Math.min(2.2, Math.max(0.3, zoom * zoomFactor))
+    hasUserInteracted = true
+
+    // Normalize wheel delta to keep zoom velocity smooth across mice & trackpads
+    const normalizedDelta = Math.max(-1, Math.min(1, e.deltaY))
+    const zoomFactor = normalizedDelta < 0 ? 1.08 : 0.92
+    const nextZoom = Math.min(2.0, Math.max(0.35, zoom * zoomFactor))
+
+    // Zoom smoothly anchored towards mouse cursor
+    if (containerEl) {
+      const rect = containerEl.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left - containerWidth / 2
+      const mouseY = e.clientY - rect.top - containerHeight / 2
+
+      const ratio = nextZoom / zoom
+      const newPanX = mouseX - (mouseX - panX) * ratio
+      const newPanY = mouseY - (mouseY - panY) * ratio
+      const clamped = clampPan(newPanX, newPanY, nextZoom)
+      panX = clamped.x
+      panY = clamped.y
+    }
+
+    zoom = nextZoom
   }
 
   onMount(() => {
@@ -273,11 +345,14 @@
       for (const entry of entries) {
         containerWidth = entry.contentRect.width || 900
         containerHeight = entry.contentRect.height || 520
-        fitView()
+        if (!hasAutoFitted) {
+          hasAutoFitted = true
+          fitView(true)
+        }
       }
     })
     observer.observe(containerEl)
-    fitView()
+    fitView(true)
     return () => observer.disconnect()
   })
 </script>
@@ -333,7 +408,7 @@
       <div class="flex items-center rounded-lg border border-[#1e293b] bg-[#0c111c] p-0.5">
         <button
           type="button"
-          onclick={() => (zoom = Math.min(2.2, zoom * 1.15))}
+          onclick={handleZoomIn}
           class="p-1 text-slate-400 hover:text-white hover:bg-[#1a2333] rounded transition-colors cursor-pointer flex items-center justify-center"
           title="Zoom In"
           aria-label="Zoom In"
@@ -342,7 +417,7 @@
         </button>
         <button
           type="button"
-          onclick={() => (zoom = Math.max(0.3, zoom / 1.15))}
+          onclick={handleZoomOut}
           class="p-1 text-slate-400 hover:text-white hover:bg-[#1a2333] rounded transition-colors cursor-pointer flex items-center justify-center"
           title="Zoom Out"
           aria-label="Zoom Out"
@@ -351,7 +426,7 @@
         </button>
         <button
           type="button"
-          onclick={fitView}
+          onclick={handleResetView}
           class="p-1 text-slate-400 hover:text-white hover:bg-[#1a2333] rounded transition-colors cursor-pointer flex items-center justify-center"
           title="Reset View"
           aria-label="Reset View"
@@ -379,7 +454,7 @@
     bind:this={containerEl}
     role="region"
     aria-label="Provider topology map"
-    class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing"
+    class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing touch-none"
     style="background-color: #05070c; background-image: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.04) 0%, transparent 68%), radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 100% 100%, 28px 28px;"
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
@@ -484,6 +559,25 @@
               stroke-linecap="round"
               class="topology-edge-flow-reverse"
             />
+
+            <!-- High-energy token packet dots flowing along the active curve (aliran titik lewat) -->
+            {#if node.isActive}
+              <!-- Primary prompt packet dot (Gateway -> Provider) -->
+              <circle r="4.2" fill="#38bdf8" opacity="0">
+                <animateMotion dur="1.1s" repeatCount="indefinite" path={node.curvePath} />
+                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.1s" repeatCount="indefinite" />
+              </circle>
+              <!-- Secondary trailing token packet dot (Gateway -> Provider) -->
+              <circle r="3.2" fill="#7dd3fc" opacity="0">
+                <animateMotion dur="1.1s" begin="0.55s" repeatCount="indefinite" path={node.curvePath} />
+                <animate attributeName="opacity" values="0;0.85;0.85;0" keyTimes="0;0.12;0.88;1" dur="1.1s" begin="0.55s" repeatCount="indefinite" />
+              </circle>
+              <!-- Completion response packet dot (Provider -> Gateway) -->
+              <circle r="3.6" fill="#34d399" opacity="0">
+                <animateMotion dur="1.3s" repeatCount="indefinite" path={node.returnPath} />
+                <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.12;0.88;1" dur="1.3s" repeatCount="indefinite" />
+              </circle>
+            {/if}
           </g>
 
           <!-- Warm Amber Recent Trace (Smooth Fade In / Fade Out) -->
