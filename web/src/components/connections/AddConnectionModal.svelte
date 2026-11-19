@@ -490,7 +490,7 @@
               title="Close"
               class="w-4 h-4 rounded-full bg-[#FF5F56] hover:brightness-90 transition-all cursor-pointer flex items-center justify-center group/dot"
             >
-              <span class="text-[9px] font-bold text-white opacity-0 group-hover/dot:opacity-100 transition-opacity leading-none">✕</span>
+              <span class="material-symbols-outlined notranslate text-[10px] text-white opacity-0 group-hover/dot:opacity-100 transition-opacity leading-none" translate="no">close</span>
             </button>
             <div class="w-4 h-4 rounded-full bg-[#3a3a3a]/20 dark:bg-white/15 cursor-not-allowed"></div>
             <div class="w-4 h-4 rounded-full bg-[#3a3a3a]/20 dark:bg-white/15 cursor-not-allowed"></div>
@@ -548,8 +548,13 @@
               bind:value={bulkText}
             ></textarea>
             {#if bulkResult}
-              <div class="text-sm font-medium {bulkResult.failed > 0 ? 'text-yellow-400' : 'text-green-400'}">
-                ✓ {bulkResult.success} added{bulkResult.failed > 0 ? `, ✗ ${bulkResult.failed} failed` : ''}
+              <div class="flex items-center gap-1.5 text-sm font-medium {bulkResult.failed > 0 ? 'text-yellow-400' : 'text-green-400'}">
+                <span class="material-symbols-outlined notranslate text-[16px] text-emerald-500" translate="no">check_circle</span>
+                <span>{bulkResult.success} added</span>
+                {#if bulkResult.failed > 0}
+                  <span class="material-symbols-outlined notranslate text-[16px] text-rose-500 ml-1" translate="no">error</span>
+                  <span>{bulkResult.failed} failed</span>
+                {/if}
               </div>
             {/if}
             <div class="flex gap-2">
@@ -594,11 +599,12 @@
                     <span class="text-[11px] text-text-muted mt-0.5">Pay-as-you-go per token (PAYG)</span>
                   </button>
                 </div>
-                <div class="text-xs text-text-muted mt-0.5">
+                <div class="text-xs text-text-muted mt-0.5 flex items-center gap-1">
+                  <span class="material-symbols-outlined notranslate text-[14px] text-primary shrink-0" translate="no">lightbulb</span>
                   {#if formMistralUsageType === 'vibe'}
-                    💡 Get key at: <a href="https://chat.mistral.ai/code/extensions" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">chat.mistral.ai/code/extensions</a> (Advanced section)
+                    <span>Get key at: <a href="https://chat.mistral.ai/code/extensions" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">chat.mistral.ai/code/extensions</a> (Advanced section)</span>
                   {:else}
-                    💡 Get key at: <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">console.mistral.ai/api-keys</a>
+                    <span>Get key at: <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">console.mistral.ai/api-keys</a></span>
                   {/if}
                 </div>
               </div>

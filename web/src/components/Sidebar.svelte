@@ -10,6 +10,7 @@
     loadSidebarPrefs,
   } from '../lib/sidebarPrefs.svelte'
   import { pinnedNavEntries } from '../lib/navFavorites.svelte'
+  import { i18n } from '../lib/i18n'
 
   export type { ActiveTab }
   let {
@@ -279,7 +280,7 @@
             class="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
           >
             <code class="block text-[10px] text-green-700 dark:text-amber-300 font-mono truncate bg-surface/70 px-1 py-0.5 rounded">
-              {copied ? '✓ copied!' : INSTALL_CMD}
+              {copied ? 'Copied!' : INSTALL_CMD}
             </code>
           </button>
         </div>
@@ -317,7 +318,7 @@
                 : 'group-hover:text-primary transition-colors'}">{entry.icon}</span
             >
             {#if !iconRail}
-              <span class="text-[13px] flex-1">{entry.label}</span>
+              <span class="text-[13px] flex-1">{i18n.t(`nav.${entry.id}`, entry.label)}</span>
             {/if}
             {#if pinBadge && !iconRail}
               <span
@@ -421,7 +422,7 @@
                     >
                       {child.icon}
                     </span>
-                    <span class="text-[13px]">{child.label}</span>
+                    <span class="text-[13px]">{i18n.t(`nav.${child.id}`, child.label)}</span>
                   </a>
                 {/each}
               </div>
@@ -447,7 +448,7 @@
                 {entry.icon}
               </span>
               {#if !iconRail}
-                <span class="text-[13px] flex-1">{entry.label}</span>
+                <span class="text-[13px] flex-1">{i18n.t(`nav.${entry.id}`, entry.label)}</span>
               {/if}
               {#if badge && !iconRail}
                 <span

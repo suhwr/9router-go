@@ -44,24 +44,24 @@ describe('getLatencyBadge', () => {
   })
 
   test('returns green lightning badge for latency < 300ms', () => {
-    expect(getLatencyBadge(50)).toEqual({ variant: 'success', text: '⚡ 50ms' })
-    expect(getLatencyBadge(299)).toEqual({ variant: 'success', text: '⚡ 299ms' })
+    expect(getLatencyBadge(50)).toEqual({ variant: 'success', text: '50ms', icon: 'bolt' })
+    expect(getLatencyBadge(299)).toEqual({ variant: 'success', text: '299ms', icon: 'bolt' })
   })
 
   test('returns amber hourglass badge for latency between 300ms and 800ms', () => {
-    expect(getLatencyBadge(300)).toEqual({ variant: 'warning', text: '⏳ 300ms' })
-    expect(getLatencyBadge(550)).toEqual({ variant: 'warning', text: '⏳ 550ms' })
-    expect(getLatencyBadge(800)).toEqual({ variant: 'warning', text: '⏳ 800ms' })
+    expect(getLatencyBadge(300)).toEqual({ variant: 'warning', text: '300ms', icon: 'schedule' })
+    expect(getLatencyBadge(550)).toEqual({ variant: 'warning', text: '550ms', icon: 'schedule' })
+    expect(getLatencyBadge(800)).toEqual({ variant: 'warning', text: '800ms', icon: 'schedule' })
   })
 
-  test('returns red turtle badge for latency > 800ms', () => {
-    expect(getLatencyBadge(801)).toEqual({ variant: 'error', text: '🐢 801ms' })
-    expect(getLatencyBadge(1250)).toEqual({ variant: 'error', text: '🐢 1250ms' })
+  test('returns red speed badge for latency > 800ms', () => {
+    expect(getLatencyBadge(801)).toEqual({ variant: 'error', text: '801ms', icon: 'speed' })
+    expect(getLatencyBadge(1250)).toEqual({ variant: 'error', text: '1250ms', icon: 'speed' })
   })
 
   test('rounds fractional latency to nearest integer', () => {
-    expect(getLatencyBadge(123.4)).toEqual({ variant: 'success', text: '⚡ 123ms' })
-    expect(getLatencyBadge(456.7)).toEqual({ variant: 'warning', text: '⏳ 457ms' })
+    expect(getLatencyBadge(123.4)).toEqual({ variant: 'success', text: '123ms', icon: 'bolt' })
+    expect(getLatencyBadge(456.7)).toEqual({ variant: 'warning', text: '457ms', icon: 'schedule' })
   })
 })
 

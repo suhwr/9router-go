@@ -346,9 +346,10 @@
       <button
         type="button"
         onclick={() => (message = null)}
-        class="text-xs opacity-70 hover:opacity-100 cursor-pointer font-bold px-1"
+        class="text-xs opacity-70 hover:opacity-100 cursor-pointer px-1 flex items-center justify-center"
+        aria-label="Dismiss message"
       >
-        ✕
+        <span class="material-symbols-outlined notranslate text-[14px]" translate="no">close</span>
       </button>
     </div>
   {/if}

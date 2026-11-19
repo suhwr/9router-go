@@ -53,7 +53,8 @@
   {/if}
   {#if deprecated}
     <span
-      class="material-symbols-outlined text-[13px] leading-none shrink-0 {isAdded ? 'text-white/90' : 'text-warning'}"
+      class="material-symbols-outlined notranslate text-[13px] leading-none shrink-0 {isAdded ? 'text-white/90' : 'text-warning'}"
+      translate="no"
       title={deprecatedStatusTitle}
       aria-label={deprecatedStatusLabel}
     >error</span>

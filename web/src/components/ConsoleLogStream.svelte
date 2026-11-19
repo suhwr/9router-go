@@ -2,7 +2,7 @@
   // Renders the console buffer: filter by level, search, and read the rows.
   // The server stamps each row's level (internal/log.ConsoleEntry), so colour
   // follows the emitted severity — never a guess made from the message text.
-  import { ArrowDown, Copy, Download, Search, X } from 'lucide-svelte'
+  import { ArrowDown, Copy, Download, Pause, Play, Search, X } from 'lucide-svelte'
   import Button from '../lib/ui/Button.svelte'
   import { notifications } from '../lib/notifications'
   import {
@@ -57,11 +57,28 @@
   let query = $state('')
   let wrap = $state(false)
   let following = $state(true)
+  let isPaused = $state(false)
+  let frozenEntries = $state<ConsoleEntry[]>([])
   let mutedLevels = $state<Set<LogLevel>>(new Set())
   let viewport = $state<HTMLDivElement | null>(null)
 
-  const counts = $derived(countByLevel(entries))
-  const kept = $derived(entries.filter((entry) => !mutedLevels.has(entry.level)))
+  function togglePause() {
+    if (isPaused) {
+      isPaused = false
+      frozenEntries = []
+      if (following) {
+        requestAnimationFrame(() => scrollToLatest())
+      }
+    } else {
+      isPaused = true
+      frozenEntries = [...entries]
+    }
+  }
+
+  const activeEntries = $derived(isPaused ? frozenEntries : entries)
+  const newEntriesCount = $derived(isPaused ? Math.max(0, entries.length - frozenEntries.length) : 0)
+  const counts = $derived(countByLevel(activeEntries))
+  const kept = $derived(activeEntries.filter((entry) => !mutedLevels.has(entry.level)))
   const visible = $derived(filterEntries(kept, query))
 
   function toggleLevel(level: LogLevel) {
@@ -111,7 +128,7 @@
 
   $effect(() => {
     void entries.length
-    if (following && viewport) viewport.scrollTop = viewport.scrollHeight
+    if (!isPaused && following && viewport) viewport.scrollTop = viewport.scrollHeight
   })
 </script>
 
@@ -161,6 +178,25 @@
         </button>
       {/if}
     </div>
+
+    <button
+      type="button"
+      onclick={togglePause}
+      title={isPaused ? 'Resume live log streaming' : 'Pause log streaming'}
+      class="h-11 sm:h-7 cursor-pointer rounded-[8px] border px-3 sm:px-2.5 text-xs font-medium transition-colors duration-150 {isPaused
+        ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+        : 'border-border bg-surface hover:bg-surface-2 text-text-main'}"
+    >
+      <div class="flex items-center gap-1.5">
+        {#if isPaused}
+          <Play class="h-3.5 w-3.5 text-amber-500" />
+          <span>Resume {newEntriesCount > 0 ? `(${newEntriesCount} new)` : ''}</span>
+        {:else}
+          <Pause class="h-3.5 w-3.5 text-text-muted" />
+          <span>Pause</span>
+        {/if}
+      </div>
+    </button>
 
     <button
       type="button"
@@ -220,47 +256,19 @@
         </Button>
       </div>
     {:else}
-      <div class="divide-y divide-border-subtle/60">
+      <div class="divide-y divide-border-subtle/40 font-mono text-xs">
         {#each visible as entry (entry.seq)}
           {@const meta = LEVEL_META[entry.level]}
           {@const parts = splitTag(entry.line)}
-          {@const comboInfo = parts ? parseComboLog(parts.message) : null}
-          <div class="flex items-baseline gap-2.5 px-3 py-1.5 hover:bg-surface-3/40 transition-colors border-l-2 {entry.level === 'error' ? 'border-red-500' : entry.level === 'warn' ? 'border-amber-500' : comboInfo ? 'border-brand-500/60' : 'border-transparent'}">
-            <time class="shrink-0 tabular-nums text-[11px] text-text-muted font-mono">{formatClock(entry.time)}</time>
+          <div class="flex items-start gap-2.5 px-3 py-1 hover:bg-surface-3/30 transition-colors leading-relaxed">
+            <time class="shrink-0 tabular-nums text-[11px] text-text-muted">{formatClock(entry.time)}</time>
             <span class="w-7 shrink-0 text-[10px] font-bold tracking-wider {meta.text}">{meta.label}</span>
             <div class="min-w-0 flex-1 {wrap ? 'break-words' : 'whitespace-pre'} {meta.text}">
-              {#if comboInfo}
-                <div class="flex flex-wrap items-center gap-1.5 font-sans">
-                  <span class="inline-flex items-center gap-1 rounded bg-brand-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-brand-600 dark:text-brand-400 border border-brand-500/25">
-                    <span class="material-symbols-outlined text-[13px]">hub</span>
-                    {comboInfo.combo}
-                  </span>
-                  {#if comboInfo.index}
-                    <span class="inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                      #{comboInfo.index}
-                    </span>
-                  {/if}
-                  {#if comboInfo.model}
-                    <span class="inline-flex items-center rounded bg-surface-3 px-1.5 py-0.5 text-[11px] font-mono text-text-main border border-border">
-                      {comboInfo.model}
-                    </span>
-                  {/if}
-                  {#if comboInfo.provider}
-                    <span class="text-[10px] text-text-muted">
-                      ({comboInfo.provider}{comboInfo.conn ? ` · ${comboInfo.conn}` : ''})
-                    </span>
-                  {/if}
-                  {#if comboInfo.ms}
-                    <span class="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      {comboInfo.ms}ms
-                    </span>
-                  {/if}
-                  {#if comboInfo.action}
-                    <span class="text-[11px] opacity-75">{comboInfo.action}</span>
-                  {/if}
-                </div>
+              {#if parts}
+                <span class="text-text-muted/80 font-semibold">[{parts.tag}]</span>{' '}
+                <span class="text-text-main">{parts.message}</span>
               {:else}
-                {#if parts}<span class="opacity-70 font-mono">[{parts.tag}]</span>{' '}{:else}{/if}<span class="font-mono text-xs">{parts?.message ?? entry.line}</span>
+                <span class="text-text-main">{entry.line}</span>
               {/if}
             </div>
           </div>

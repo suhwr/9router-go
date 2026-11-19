@@ -85,7 +85,8 @@
         bg: 'bg-neutral-400 dark:bg-neutral-600',
         bgLight: 'bg-neutral-500/10',
         border: 'border-border/50',
-        emoji: '⚪',
+        icon: 'help',
+        iconColor: 'text-text-muted',
       }
     }
     if (remaining > 70) {
@@ -94,7 +95,8 @@
         bg: 'bg-emerald-500',
         bgLight: 'bg-emerald-500/15',
         border: 'border-emerald-500/30',
-        emoji: '🟢',
+        icon: 'check_circle',
+        iconColor: 'text-emerald-500',
       }
     }
     if (remaining >= 30) {
@@ -103,7 +105,8 @@
         bg: 'bg-amber-500',
         bgLight: 'bg-amber-500/15',
         border: 'border-amber-500/30',
-        emoji: '🟡',
+        icon: 'warning',
+        iconColor: 'text-amber-500',
       }
     }
     return {
@@ -111,7 +114,8 @@
       bg: 'bg-rose-500',
       bgLight: 'bg-rose-500/15',
       border: 'border-rose-500/30',
-      emoji: '🔴',
+      icon: 'error',
+      iconColor: 'text-rose-500',
     }
   }
 
@@ -153,7 +157,8 @@
               bg: 'bg-blue-500',
               bgLight: 'bg-blue-500/15',
               border: 'border-blue-500/30',
-              emoji: '💰',
+              icon: 'payments',
+              iconColor: 'text-blue-500',
             }
           : colorClassesFor((quota.colorPercentage as number | undefined) ?? quota.remainingPct)}
         {@const countdown = formatResetTime(quota.resetAt)}
@@ -164,16 +169,16 @@
         <div
           class="group/row flex flex-col gap-1 rounded-lg border border-border/70 bg-surface/80 px-2.5 py-1.5 transition-all hover:bg-surface-2 hover:border-border shadow-2xs"
         >
-          <!-- Line 1: Emoji, Name, Usage/Countdown, Percentage Pill, Hide -->
+          <!-- Line 1: Icon, Name, Usage/Countdown, Percentage Pill, Hide -->
           <div class="flex items-center justify-between gap-1.5 min-w-0">
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
-              <span class="text-xs shrink-0 select-none">{colors.emoji}</span>
+              <span class="material-symbols-outlined notranslate text-[13px] {colors.iconColor} shrink-0" translate="no">{colors.icon}</span>
               <span class="text-xs font-semibold text-text-main truncate max-w-[130px] sm:max-w-[200px]" title={quota.name}>
                 {quota.name}
               </span>
               {#if countdown !== '-' || resetDisplay}
                 <span class="hidden sm:inline-flex items-center gap-1 text-[10px] text-text-muted font-medium ml-1 truncate">
-                  <span class="material-symbols-outlined text-[12px] opacity-60">schedule</span>
+                  <span class="material-symbols-outlined notranslate text-[12px] opacity-60" translate="no">schedule</span>
                   {countdown !== '-' ? countdownLabel : resetDisplay}
                 </span>
               {/if}
@@ -199,7 +204,7 @@
                   title="Hide this quota row"
                   aria-label="Hide quota {quota.name}"
                 >
-                  <span class="material-symbols-outlined text-[13px]">visibility_off</span>
+                  <span class="material-symbols-outlined notranslate text-[13px]" translate="no">visibility_off</span>
                 </button>
               {/if}
             </div>
@@ -226,7 +231,7 @@
             </span>
             {#if (countdown !== '-' || resetDisplay)}
               <span class="sm:hidden inline-flex items-center gap-0.5 text-[9px] font-sans font-medium text-text-muted shrink-0">
-                <span class="material-symbols-outlined text-[11px] opacity-60">schedule</span>
+                <span class="material-symbols-outlined notranslate text-[11px] opacity-60" translate="no">schedule</span>
                 {countdown !== '-' ? countdownLabel : resetDisplay}
               </span>
             {/if}

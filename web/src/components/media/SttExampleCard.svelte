@@ -440,7 +440,7 @@
     <div class="mt-1">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1.5">
         <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">
-          Response {#if result && latency}<span class="font-normal normal-case">⚡ {latency}ms</span>{/if}
+          Response {#if result && latency}<span class="font-normal normal-case inline-flex items-center gap-0.5"><span class="material-symbols-outlined notranslate text-[13px] text-amber-500" translate="no">bolt</span>{latency}ms</span>{/if}
         </span>
         {#if result}
           <button

@@ -6,6 +6,7 @@
   import MenuItem from '../lib/ui/MenuItem.svelte'
   import { type ActiveTab } from '../lib/router'
   import { promptInstall, subscribeInstallPrompt } from '../lib/pwa'
+  import { i18n } from '../lib/i18n'
 
   let {
     activeTab = 'endpoint',
@@ -327,6 +328,11 @@
         label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         icon={isDark ? 'light_mode' : 'dark_mode'}
         onSelect={toggleTheme}
+      />
+      <MenuItem
+        label={i18n.lang === 'id' ? 'Bahasa: Indonesia (Ganti ke English)' : 'Language: English (Ganti ke Indonesia)'}
+        icon="language"
+        onSelect={() => i18n.toggleLang()}
       />
       <MenuItem label="Change Log" icon="history" onSelect={() => (isChangelogOpen = true)} />
 

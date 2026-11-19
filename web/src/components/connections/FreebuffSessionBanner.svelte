@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RotateCcw, ArrowLeftRight, AlertTriangle, CircleAlert } from 'lucide-svelte'
+  import { RotateCcw, ArrowLeftRight, AlertTriangle, CircleAlert, Lock } from 'lucide-svelte'
   import type {
     FreebuffSessionStatusResponse,
     FreebuffSessionSwitchResponse,
@@ -191,7 +191,7 @@
     {#if countryBlocked || status === 'banned'}
       <AlertTriangle class="w-4 h-4" />
     {:else if isActive}
-      🔒
+      <Lock class="w-4 h-4" />
     {:else}
       <CircleAlert class="w-4 h-4" />
     {/if}

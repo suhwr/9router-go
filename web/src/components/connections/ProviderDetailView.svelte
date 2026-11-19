@@ -3512,7 +3512,7 @@
     <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
       <span class="material-symbols-outlined text-[16px] text-yellow-500 mt-0.5 shrink-0">warning</span>
       <p class="text-xs text-red-600 dark:text-yellow-400 leading-relaxed">
-        ⚠️ Risk Notice: This provider uses a subscription/OAuth session not officially licensed for proxy/router use. Account may be restricted or banned. Use at your own risk.
+        Risk Notice: This provider uses a subscription/OAuth session not officially licensed for proxy/router use. Account may be restricted or banned. Use at your own risk.
       </p>
     </div>
   {/if}
@@ -4101,7 +4101,7 @@
                             class="inline-flex items-center gap-1 rounded-full font-semibold px-2 py-0.5 text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                             title="Active session bound to {boundModel}"
                           >
-                            <span>🔒</span>
+                            <span class="material-symbols-outlined notranslate text-[12px]" translate="no">lock</span>
                             <span class="font-mono">{boundModel}</span>
                           </span>
                         {:else if fbSess?.status === 'queued'}
@@ -4109,14 +4109,14 @@
                             class="inline-flex items-center gap-1 rounded-full font-semibold px-2 py-0.5 text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
                             title="Waiting in queue"
                           >
-                            <span>⏳</span> queued
+                            <span class="material-symbols-outlined notranslate text-[12px]" translate="no">hourglass_empty</span> queued
                           </span>
                         {:else if fbSess?.status === 'banned'}
                           <span
                             class="inline-flex items-center gap-1 rounded-full font-semibold px-2 py-0.5 text-[10px] bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
                             title="Account banned"
                           >
-                            <span>🚫</span> banned
+                            <span class="material-symbols-outlined notranslate text-[12px]" translate="no">block</span> banned
                           </span>
                         {:else if fbSess}
                           <span
@@ -4577,138 +4577,118 @@
         <p class="text-xs text-text-muted">No models match the current search and filters.</p>
       {/if}
       {#if compatibleRows.length > 0}
-        <div class="flex flex-col gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {#each filteredRows as row (row.id)}
             {@const tStatus = compatibleTestResults[row.id]}
             {@const tError = compatibleTestErrors[row.id]}
             {@const isTestingRow = compatibleTesting[row.id]}
-            <div class="flex items-start gap-3 p-3 rounded-lg border {tStatus === 'ok' ? 'border-green-500/40' : tStatus === 'blocked' ? 'border-amber-500/40' : tStatus === 'error' ? 'border-red-500/40' : 'border-border'} hover:bg-sidebar/50">
-              <input
-                type="checkbox"
-                checked={selectedModelIds.has(row.id)}
-                onchange={() => toggleModelSelected(row.id)}
-                class="mt-1.5 size-3.5 shrink-0 accent-brand-500 cursor-pointer"
-                aria-label="Select {row.id}"
-              />
-              <span
-                class="material-symbols-outlined text-base text-text-muted mt-0.5"
-                style={tStatus === 'ok' ? 'color:#22c55e' : tStatus === 'blocked' ? 'color:#f59e0b' : tStatus === 'error' ? 'color:#ef4444' : undefined}
-              >
-                {tStatus === 'ok' ? 'check_circle' : tStatus === 'blocked' ? 'schedule' : tStatus === 'error' ? 'cancel' : 'smart_toy'}
-              </span>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate">{row.id}</p>
-                <div class="flex items-center gap-1 mt-1 flex-wrap">
-                  <code class="max-w-[72vw] truncate text-xs text-text-muted font-mono bg-sidebar px-1.5 py-0.5 rounded sm:max-w-[360px]">{displayAlias()}/{row.id}</code>
-                  <!-- Capability icons, mirroring the registered grid's row:
-                       the same model id can be imported into a compatible
-                       node, and a row that shows nothing there reads as a
-                       model with no capabilities at all. -->
-                  {#if row.caps.vision}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                        <Eye class="w-3 h-3" />
-                        <span>Vision</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Vision — Supports image and visual inputs
-                      </div>
+            <div
+              class="group flex flex-col justify-between rounded-xl border border-border/70 bg-surface/80 p-2.5 hover:border-border hover:bg-surface-2/40 transition-colors shadow-2xs {tStatus === 'ok' ? 'border-green-500/30' : tStatus === 'blocked' ? 'border-amber-500/30' : tStatus === 'error' ? 'border-red-500/30' : ''}"
+            >
+              <!-- Top Row: Checkbox + Full Model ID (break-all, NO TRUNCATION ...) + Actions -->
+              <div class="flex items-start justify-between gap-2 min-w-0">
+                <div class="flex items-start gap-1.5 min-w-0 flex-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedModelIds.has(row.id)}
+                    onchange={() => toggleModelSelected(row.id)}
+                    class="mt-1 size-3.5 shrink-0 accent-brand-500 cursor-pointer"
+                    aria-label="Select {row.id}"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <code class="break-all font-mono text-xs font-semibold text-text-main leading-snug select-all">
+                      {row.id}
+                    </code>
+                    <div class="text-[10px] text-text-muted font-mono break-all mt-0.5">
+                      {displayAlias()}/{row.id}
                     </div>
-                  {/if}
-                  {#if row.caps.reasoning}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                        <Brain class="w-3 h-3" />
-                        <span>Reasoning</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Reasoning — Deep thinking & chain-of-thought
-                      </div>
-                    </div>
-                  {/if}
-                  {#if row.caps.jailbreak}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
-                        <span class="material-symbols-outlined text-[11px]">local_fire_department</span>
-                        <span>Uncensored</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Jailbreak — Uncensored / unrestricted model
-                      </div>
-                    </div>
-                  {/if}
-                  <div class="relative group/btn">
-                    <button
-                      type="button"
-                      onclick={() => copyCompatibleModel(row.id)}
-                      class="p-0.5 hover:bg-sidebar rounded text-text-muted hover:text-primary cursor-pointer"
-                    >
-                      <span class="material-symbols-outlined text-sm">{copiedModelId === row.id ? 'check' : 'content_copy'}</span>
-                    </button>
-                    <span class="pointer-events-none absolute top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                      {copiedModelId === row.id ? 'Copied!' : 'Copy'}
-                    </span>
-                  </div>
-                  {#if providerConnections.length > 0}
-                    <div class="relative group/btn">
-                      <button
-                        type="button"
-                        onclick={() => handleTestCompatibleModel(row.id)}
-                        disabled={isTestingRow}
-                        class="p-0.5 hover:bg-sidebar rounded text-text-muted hover:text-primary transition-colors cursor-pointer"
-                      >
-                        <span class="material-symbols-outlined text-sm" style={isTestingRow ? 'animation: spin 1s linear infinite' : undefined}>
-                          {isTestingRow ? 'sync' : 'science'}
-                        </span>
-                      </button>
-                      <span class="pointer-events-none absolute top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                        {isTestingRow ? 'Testing...' : 'Test'}
-                      </span>
-                    </div>
-                  {/if}
-                  {#if tStatus && compatibleTestLatency[row.id] !== undefined}
-                    <span class="text-xs text-text-muted font-mono">{compatibleTestLatency[row.id]} ms</span>
-                  {/if}
-                  <!-- Enable/disable this one row. A disabled row stops being
-                       published by /v1/models and disappears from the pickers,
-                       which is the difference between this and Delete: the row
-                       stays here, reversible, and the import that wrote it is
-                       left alone. -->
-                  <div class="relative group/btn">
-                    <button
-                      type="button"
-                      onclick={() => (row.disabled ? handleEnableModel(row.id) : handleDisableModel(row.id))}
-                      class="p-0.5 rounded text-text-muted transition-colors hover:text-primary cursor-pointer {row.disabled ? 'text-amber-500' : ''}"
-                      title={row.disabled ? 'Enable this model — it returns to /v1/models and the pickers' : 'Disable this model — it stops appearing in /v1/models and the pickers'}
-                    >
-                      <span class="material-symbols-outlined text-sm">{row.disabled ? 'visibility_off' : 'visibility'}</span>
-                    </button>
-                    <span class="pointer-events-none absolute top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                      {row.disabled ? 'Disabled — enable' : 'Disable'}
-                    </span>
                   </div>
                 </div>
-                {#if row.disabled}
-                  <div class="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-md border border-amber-500/20">
-                    <span class="material-symbols-outlined text-sm shrink-0 mt-0.5">visibility_off</span>
-                    <span class="font-medium leading-relaxed">Disabled — hidden from <code class="font-mono">/v1/models</code> and every model picker. The row stays here so you can enable it again.</span>
-                  </div>
+
+                <!-- Action buttons cluster -->
+                <div class="flex items-center gap-1 shrink-0">
+                  {#if providerConnections.length > 0}
+                    <button
+                      type="button"
+                      onclick={() => handleTestCompatibleModel(row.id)}
+                      disabled={isTestingRow}
+                      class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-surface-3 hover:text-text-main transition-colors cursor-pointer disabled:opacity-50"
+                      title={tError || (tStatus === 'ok' ? 'Test Passed' : 'Test Model')}
+                    >
+                      <span class="material-symbols-outlined notranslate text-[14px] {isTestingRow ? 'animate-spin text-primary' : tStatus === 'ok' ? 'text-emerald-500' : tStatus === 'error' ? 'text-rose-500' : ''}" translate="no">
+                        {isTestingRow ? 'sync' : tStatus === 'ok' ? 'check_circle' : tStatus === 'error' ? 'cancel' : 'science'}
+                      </span>
+                    </button>
+                  {/if}
+
+                  <button
+                    type="button"
+                    onclick={() => copyCompatibleModel(row.id)}
+                    class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-surface-3 hover:text-text-main transition-colors cursor-pointer"
+                    title="Copy model ID"
+                  >
+                    <span class="material-symbols-outlined notranslate text-[14px] {copiedModelId === row.id ? 'text-emerald-500' : ''}" translate="no">
+                      {copiedModelId === row.id ? 'check' : 'content_copy'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onclick={() => (row.disabled ? handleEnableModel(row.id) : handleDisableModel(row.id))}
+                    class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-surface-3 hover:text-text-main transition-colors cursor-pointer {row.disabled ? 'text-amber-500' : ''}"
+                    title={row.disabled ? 'Enable model' : 'Disable model'}
+                  >
+                    <span class="material-symbols-outlined notranslate text-[14px]" translate="no">
+                      {row.disabled ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onclick={() => handleDeleteCompatibleModel(row)}
+                    class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+                    title="Remove model"
+                  >
+                    <span class="material-symbols-outlined notranslate text-[14px]" translate="no">delete</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Bottom Row: Badges & status -->
+              <div class="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border-subtle/50 pt-1.5">
+                {#if row.caps.vision}
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    <Eye class="size-3" />
+                    <span>Vision</span>
+                  </span>
                 {/if}
-                {#if tError}
-                  <div class="mt-2 flex items-start gap-1.5 text-xs text-red-500 bg-red-500/10 px-2.5 py-1.5 rounded-md border border-red-500/20">
-                    <span class="material-symbols-outlined text-sm shrink-0 mt-0.5">error</span>
-                    <span class="break-words font-medium leading-relaxed">{tError}</span>
-                  </div>
+                {#if row.caps.reasoning}
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <Brain class="size-3" />
+                    <span>Reasoning</span>
+                  </span>
+                {/if}
+                {#if row.caps.jailbreak}
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                    <span class="material-symbols-outlined notranslate text-[11px]" translate="no">local_fire_department</span>
+                    <span>Uncensored</span>
+                  </span>
+                {/if}
+                {#if row.disabled}
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Disabled
+                  </span>
+                {/if}
+                {#if tStatus && compatibleTestLatency[row.id] !== undefined}
+                  <span class="ml-auto font-mono text-[10px] text-text-muted">{compatibleTestLatency[row.id]}ms</span>
                 {/if}
               </div>
-              <button
-                type="button"
-                onclick={() => handleDeleteCompatibleModel(row)}
-                class="p-1 hover:bg-red-50 rounded text-red-500 cursor-pointer"
-                title="Remove model"
-              >
-                <span class="material-symbols-outlined text-sm">delete</span>
-              </button>
+
+              {#if tError}
+                <div class="mt-1.5 rounded bg-rose-500/10 px-2 py-1 text-[10px] text-rose-600 dark:text-rose-400 border border-rose-500/20 break-words">
+                  {tError}
+                </div>
+              {/if}
             </div>
           {/each}
         </div>
@@ -4850,8 +4830,8 @@
     {#if gridModels.length === 0 && allAvailableModels.length > 0}
       <p class="mb-3 text-xs text-text-muted">No models match the current search and filters.</p>
     {/if}
-    <!-- Models flex-wrap list matching upstream -->
-    <div class="flex flex-wrap gap-3">
+    <!-- Models grid matching responsive column layout -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
       {#each gridModels as model (model.id)}
         {@const level = resolveThinkingSuffix(model.id)}
         {@const fullModelId = `${storageAlias}/${model.id}${level ? `(${level})` : ''}`}
@@ -4869,158 +4849,131 @@
         {@const isTestingThis = testStatus === 'testing'}
         {@const isSessionActive = checkIsActiveSession(model.id)}
         <div
-          class="group min-w-0 max-w-full rounded-xl border px-3 py-2.5 {testStatus === 'ok' ? 'border-green-500/40 bg-surface' : testStatus === 'blocked' ? 'border-amber-500/40 bg-surface' : testStatus === 'error' ? 'border-red-500/40 bg-surface' : 'border-border/80 bg-surface'} hover:border-border hover:shadow-xs transition-all"
+          class="group flex flex-col justify-between rounded-xl border border-border/70 bg-surface/80 p-2.5 hover:border-border hover:bg-surface-2/40 transition-colors shadow-2xs {testStatus === 'ok' ? 'border-green-500/30' : testStatus === 'blocked' ? 'border-amber-500/30' : testStatus === 'error' ? 'border-red-500/30' : ''}"
         >
-          <div class="flex min-w-0 items-start gap-2 sm:items-center">
-            <input
-              type="checkbox"
-              checked={selectedModelIds.has(model.id)}
-              onchange={() => toggleModelSelected(model.id)}
-              class="mt-1 sm:mt-0 size-3.5 shrink-0 accent-brand-500 cursor-pointer"
-              aria-label="Select {model.id}"
-            />
-            <span class="material-symbols-outlined shrink-0 text-base text-text-muted">smart_toy</span>
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <code class="max-w-[72vw] truncate rounded-md bg-sidebar px-2 py-0.5 font-mono text-xs text-text-muted sm:max-w-[360px] border border-border/40">
+          <!-- Top Row: Checkbox + Full Model ID (break-all, NO TRUNCATION ...) + Actions -->
+          <div class="flex items-start justify-between gap-2 min-w-0">
+            <div class="flex items-start gap-1.5 min-w-0 flex-1">
+              <input
+                type="checkbox"
+                checked={selectedModelIds.has(model.id)}
+                onchange={() => toggleModelSelected(model.id)}
+                class="mt-1 size-3.5 shrink-0 accent-brand-500 cursor-pointer"
+                aria-label="Select {model.id}"
+              />
+              <div class="min-w-0 flex-1">
+                <code class="break-all font-mono text-xs font-semibold text-text-main leading-snug select-all">
                   {fullModelId}
                 </code>
-                {#if rowCaps?.free}
-                  <span class="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                    FREE
-                  </span>
+                {#if model.name && model.name !== model.id}
+                  <div class="text-[10px] text-text-muted truncate mt-0.5" title={model.name}>
+                    {model.name}
+                  </div>
                 {/if}
-                {#if isSessionActive}
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Active Session
-                  </span>
-                {/if}
-                <DeprecatedBadge provider={providerId} model={model.id} />
-              </div>
-              <div class="flex min-w-0 items-center gap-2 flex-wrap pl-0.5">
-                <span class="truncate text-[11px] text-text-muted/80">{model.name}</span>
-                <span class="inline-flex items-center gap-1 flex-wrap">
-                  {#if hasVision}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                        <Eye class="w-3 h-3" />
-                        <span>Vision</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Vision — Supports image and visual inputs
-                      </div>
-                    </div>
-                  {/if}
-                  {#if hasReasoning}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                        <Brain class="w-3 h-3" />
-                        <span>Reasoning</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Reasoning — Deep thinking & chain-of-thought
-                      </div>
-                    </div>
-                  {/if}
-                  {#if rowCaps?.jailbreak}
-                    <div class="relative inline-flex group/tt">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
-                        <span class="material-symbols-outlined text-[11px]">local_fire_department</span>
-                        <span>Uncensored</span>
-                      </span>
-                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-max max-w-56 rounded px-2 py-1 text-[11px] leading-snug bg-gray-900 text-white opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150 whitespace-normal shadow-lg">
-                        Jailbreak — Uncensored / unrestricted model
-                      </div>
-                    </div>
-                  {/if}
-                </span>
               </div>
             </div>
-              {#if modelTestErrors[model.id]}
-                <span class="text-[9px] {testStatus === 'blocked' ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'} font-medium pl-1 truncate max-w-[280px]" title={modelTestErrors[model.id]}>
-                  {modelTestErrors[model.id]}
-                </span>
-              {/if}
 
-            <!-- Test button -->
-            <div class="relative shrink-0 group/btn">
+            <!-- Action buttons cluster -->
+            <div class="flex items-center gap-1 shrink-0">
+              <!-- Test button -->
               <button
                 type="button"
                 onclick={() => testModel(model.id)}
                 disabled={isTestingThis}
-                class="rounded p-0.5 text-text-muted transition-opacity hover:bg-sidebar hover:text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
-                title={modelTestErrors[model.id] || (testStatus === 'ok' ? 'Test Passed' : 'Test')}
+                class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-surface-3 hover:text-text-main transition-colors cursor-pointer disabled:opacity-50"
+                title={modelTestErrors[model.id] || (testStatus === 'ok' ? 'Test Passed' : 'Test Model')}
               >
                 {#if isTestingThis}
-                  <span class="material-symbols-outlined text-sm animate-spin text-primary">sync</span>
+                  <span class="material-symbols-outlined notranslate text-[14px] animate-spin text-primary" translate="no">sync</span>
                 {:else if testStatus === 'ok'}
-                  <span class="material-symbols-outlined text-sm text-green-500">check</span>
+                  <span class="material-symbols-outlined notranslate text-[14px] text-emerald-500" translate="no">check_circle</span>
                 {:else if testStatus === 'blocked'}
-                  <span class="material-symbols-outlined text-sm text-amber-500">schedule</span>
+                  <span class="material-symbols-outlined notranslate text-[14px] text-amber-500" translate="no">schedule</span>
                 {:else if testStatus === 'error'}
-                  <span class="material-symbols-outlined text-sm text-red-500">error</span>
+                  <span class="material-symbols-outlined notranslate text-[14px] text-rose-500" translate="no">error</span>
                 {:else}
-                  <span class="material-symbols-outlined text-sm">science</span>
+                  <span class="material-symbols-outlined notranslate text-[14px]" translate="no">science</span>
                 {/if}
               </button>
-              <span class="pointer-events-none absolute mt-1 top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity z-20 bg-surface-2 px-1 rounded shadow border border-border">
-                {#if isTestingThis}
-                  Testing...
-                {:else if testStatus === 'ok'}
-                  Passed
-                {:else if testStatus === 'blocked'}
-                  {modelTestErrors[model.id] || 'Blocked — account in cooldown'}
-                {:else if testStatus === 'error'}
-                  {modelTestErrors[model.id] || 'Failed'}
-                {:else}
-                  Test
-                {/if}
-              </span>
-            </div>
-            <!-- Copy button -->
-            <div class="relative shrink-0 group/btn">
+
+              <!-- Copy button -->
               <button
                 type="button"
                 onclick={() => copyModelId(model.id)}
-                class="rounded p-0.5 text-text-muted hover:bg-sidebar hover:text-primary cursor-pointer"
+                class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-surface-3 hover:text-text-main transition-colors cursor-pointer"
+                title="Copy model ID"
               >
-                {#if copiedModelId === model.id}
-                  <span class="material-symbols-outlined text-sm text-green-500">check</span>
-                {:else}
-                  <span class="material-symbols-outlined text-sm">content_copy</span>
-                {/if}
+                <span class="material-symbols-outlined notranslate text-[14px] {copiedModelId === model.id ? 'text-emerald-500' : ''}" translate="no">
+                  {copiedModelId === model.id ? 'check' : 'content_copy'}
+                </span>
               </button>
-              <span class="pointer-events-none absolute mt-1 top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                Copy
-              </span>
-            </div>
 
-            <!-- Disable button -->
-            <button
-              type="button"
-              onclick={() => handleDisableModel(model.id)}
-              class="ml-auto rounded p-0.5 text-text-muted opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
-              title="Disable this model"
-            >
-              <span class="material-symbols-outlined text-sm">close</span>
-            </button>
-            {#if testStatus === 'error'}
-              <!-- Unusable model: delete it. Custom models are removed from the
-                   store; built-in registry models are static, so those are
-                   disabled instead (the closest equivalent). -->
+              <!-- Disable button -->
               <button
                 type="button"
-                onclick={() => handleDeleteModel(model.id)}
-                class="rounded p-0.5 text-red-500 opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
-                title={model.isCustom ? 'Delete unusable model' : 'Unusable — disable this registry model'}
+                onclick={() => handleDisableModel(model.id)}
+                class="flex size-6 items-center justify-center rounded text-text-muted hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+                title="Disable this model"
               >
-                <span class="material-symbols-outlined text-sm">delete</span>
+                <span class="material-symbols-outlined notranslate text-[14px]" translate="no">visibility_off</span>
               </button>
+
+              {#if testStatus === 'error'}
+                <button
+                  type="button"
+                  onclick={() => handleDeleteModel(model.id)}
+                  class="flex size-6 items-center justify-center rounded text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 transition-colors cursor-pointer"
+                  title={model.isCustom ? 'Delete unusable model' : 'Unusable — disable this registry model'}
+                >
+                  <span class="material-symbols-outlined notranslate text-[14px]" translate="no">delete</span>
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          <!-- Bottom Row: Badges (Capabilities + Status tags) -->
+          <div class="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border-subtle/50 pt-1.5">
+            {#if hasVision}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                <Eye class="size-3" />
+                <span>Vision</span>
+              </span>
+            {/if}
+            {#if hasReasoning}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Brain class="size-3" />
+                <span>Reasoning</span>
+              </span>
+            {/if}
+            {#if rowCaps?.free}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                FREE
+              </span>
+            {/if}
+            {#if isSessionActive}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Active Session
+              </span>
+            {/if}
+            <DeprecatedBadge provider={providerId} model={model.id} />
+
+            {#if modelTestLatency[model.id] !== undefined && testStatus === 'ok'}
+              <span class="ml-auto font-mono text-[10px] text-text-muted">{modelTestLatency[model.id]}ms</span>
             {/if}
           </div>
+
+          {#if modelTestErrors[model.id]}
+            <div class="mt-1.5 rounded bg-rose-500/10 px-2 py-1 text-[10px] text-rose-600 dark:text-rose-400 border border-rose-500/20 break-words">
+              {modelTestErrors[model.id]}
+            </div>
+          {/if}
         </div>
       {/each}
+    </div>
+
+    <!-- Quick action buttons below model grid -->
+    <div class="mt-3 flex flex-wrap items-center gap-2">
 
       <!-- Add Model button inside the same flex-wrap -->
       <button
@@ -5192,7 +5145,7 @@
         </button>
       </div>
       <p class="text-xs text-red-600 dark:text-yellow-400 leading-relaxed mb-6">
-        ⚠️ Risk Notice: This provider uses a subscription/OAuth session not officially licensed for proxy/router use. Account may be restricted or banned. Use at your own risk.
+        Risk Notice: This provider uses a subscription/OAuth session not officially licensed for proxy/router use. Account may be restricted or banned. Use at your own risk.
       </p>
       <div class="flex gap-2 justify-end">
         <button

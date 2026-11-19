@@ -366,11 +366,13 @@ export function getStatusColor(percentage: number): 'green' | 'yellow' | 'red' {
   return 'red'
 }
 
-export function getStatusEmoji(percentage: number): string {
-  if (percentage > 70) return '🟢'
-  if (percentage >= 30) return '🟡'
-  return '🔴'
+export function getStatusIcon(percentage: number): string {
+  if (percentage > 70) return 'check_circle'
+  if (percentage >= 30) return 'warning'
+  return 'error'
 }
+
+export const getStatusEmoji = getStatusIcon
 
 export function calculatePercentage(used?: number, total?: number): number {
   if (!total || total === 0) return 0

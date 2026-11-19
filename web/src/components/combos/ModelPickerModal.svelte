@@ -139,9 +139,9 @@
               onclick={onClose}
               aria-label="Close"
               title="Close"
-              class="w-4 h-4 rounded-full bg-[#FF5F56] hover:brightness-90 transition-all cursor-pointer flex items-center justify-center"
+              class="w-4 h-4 rounded-full bg-[#FF5F56] hover:brightness-90 transition-all cursor-pointer flex items-center justify-center group"
             >
-              <span class="text-[9px] font-bold text-white leading-none">✕</span>
+              <span class="material-symbols-outlined notranslate text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity leading-none" translate="no">close</span>
             </button>
             <div class="w-4 h-4 rounded-full bg-[#3a3a3a]/20 dark:bg-white/15 cursor-not-allowed"></div>
             <div class="w-4 h-4 rounded-full bg-[#3a3a3a]/20 dark:bg-white/15 cursor-not-allowed"></div>

@@ -1063,6 +1063,9 @@
                     </Badge>
                     {#if latencyBadge}
                       <Badge variant={latencyBadge.variant} size="sm">
+                        {#if latencyBadge.icon}
+                          <span class="material-symbols-outlined notranslate text-[12px] mr-0.5" translate="no">{latencyBadge.icon}</span>
+                        {/if}
                         {latencyBadge.text}
                       </Badge>
                     {/if}

@@ -221,8 +221,9 @@
     </div>
 
     {#if bulkResult}
-      <div class="text-sm font-medium {bulkResult.skipped.length > 0 ? 'text-yellow-400' : 'text-green-400'}">
-        ✓ {summarizeBulkModels(plan, bulkResult.added.length)}
+      <div class="flex items-center text-sm font-medium {bulkResult.skipped.length > 0 ? 'text-yellow-400' : 'text-green-400'}">
+        <span class="material-symbols-outlined notranslate text-[16px] text-emerald-500 mr-1" translate="no">check_circle</span>
+        <span>{summarizeBulkModels(plan, bulkResult.added.length)}</span>
       </div>
       {#if bulkResult.skipped.length > 0}
         <ul class="text-xs text-text-muted space-y-0.5">

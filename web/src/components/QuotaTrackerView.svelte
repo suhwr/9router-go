@@ -1304,44 +1304,45 @@
     </div>
   {:else}
     <!-- Provider groups: collapsible sections, two columns per section -->
-    <div class="space-y-6">
+    <div class="space-y-4">
       {#each groupedConnections as group (group.provider)}
-        <section class="space-y-3">
+        <section class="space-y-2">
           <button
             type="button"
             onclick={() => toggleProviderGroup(group.provider)}
             aria-expanded={!groupCollapsed[group.provider]}
-            class="flex w-full items-center justify-between rounded-xl border border-border-subtle/80 bg-surface-2/70 px-3.5 py-2.5 text-left transition-all hover:bg-surface-2 hover:border-border cursor-pointer shadow-xs"
+            class="flex w-full items-center justify-between rounded-lg border border-border-subtle/70 bg-surface-2/60 px-3 py-1.5 text-left transition-all hover:bg-surface-2 hover:border-border cursor-pointer shadow-2xs"
           >
-            <div class="flex items-center gap-2.5 min-w-0">
+            <div class="flex items-center gap-2 min-w-0">
               <span
-                class="material-symbols-outlined text-lg text-text-muted transition-transform duration-200 {groupCollapsed[
+                class="material-symbols-outlined notranslate text-base text-text-muted transition-transform duration-200 {groupCollapsed[
                   group.provider
                 ]
                   ? ''
                   : 'rotate-90'}"
+                translate="no"
               >
                 chevron_right
               </span>
-              <img src={getIconPath(group.provider)} alt="" class="size-5 rounded object-contain shrink-0" />
-              <span class="text-sm font-semibold text-text-main truncate">{providerLabel(group.provider)}</span>
+              <img src={getIconPath(group.provider)} alt="" class="size-4.5 rounded object-contain shrink-0" />
+              <span class="text-xs sm:text-sm font-semibold text-text-main truncate">{providerLabel(group.provider)}</span>
               <span
-                class="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-text-muted shrink-0"
+                class="rounded-full bg-surface-3 px-1.5 py-0.2 text-[10px] font-medium text-text-muted shrink-0"
               >
                 {group.connections.length} {group.connections.length === 1 ? 'account' : 'accounts'}
               </span>
             </div>
-            <span class="text-xs text-text-muted/70 hidden sm:inline">
+            <span class="text-[11px] text-text-muted/70 hidden sm:inline">
               {groupCollapsed[group.provider] ? 'Click to expand' : 'Collapse'}
             </span>
           </button>
           {#if !groupCollapsed[group.provider]}
             {#if group.provider === 'claude'}
-              <div class="mb-3">
+              <div class="mb-2">
                 <ClaudeCacheTtl />
               </div>
             {/if}
-            <div class="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
               {#each group.connections as conn (conn.id)}
         {@const isActive = isActiveConn(conn)}
         {@const quota = quotaData[conn.id]}
@@ -1353,23 +1354,23 @@
         {@const hiddenQuotaRows = getHiddenQuotaRows(conn.provider, rawQuotas, quotaVisibility)}
 
         <div
-          class="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-border-subtle bg-surface shadow-[var(--shadow-soft)] transition-all hover:border-border/80 {isActive
+          class="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-surface shadow-2xs transition-all hover:border-border/90 {isActive
             ? ''
             : 'opacity-65 bg-surface/50'}"
         >
           <!-- Card header: Mobile responsive layout -->
-          <div class="border-b border-border-subtle/80 bg-surface-2/30 px-3 py-2">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="border-b border-border-subtle/80 bg-surface-2/30 px-2.5 py-1.5">
+            <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
               <!-- Identity Left -->
               <div class="flex min-w-0 items-center justify-between gap-2">
                 <div class="flex min-w-0 items-center gap-2">
                   <div
-                    class="flex size-7 sm:size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-2 border border-border-subtle/50 p-0.5"
+                    class="flex size-6.5 sm:size-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-2 border border-border-subtle/50 p-0.5"
                   >
                     <img
                       src={getIconPath(conn.provider)}
                       alt={conn.provider}
-                      class="size-6 object-contain"
+                      class="size-5 object-contain"
                       onerror={(e) => {
                         ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                       }}
@@ -1377,11 +1378,11 @@
                   </div>
                   <div class="min-w-0">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                      <h3 class="truncate text-xs sm:text-sm font-semibold text-text-main">
+                      <h3 class="truncate text-xs font-semibold text-text-main">
                         {providerLabel(conn.provider)}
                       </h3>
                       <span
-                        class="rounded-full px-2 py-0.2 text-[10px] font-semibold {!isActive
+                        class="rounded-full px-1.5 py-0.2 text-[9px] font-semibold {!isActive
                           ? 'bg-surface-3 text-text-muted'
                           : conn.testStatus === 'active' || conn.testStatus === 'success'
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
@@ -1395,18 +1396,18 @@
                       </span>
                     </div>
                     {#if getConnectionLabel(conn)}
-                      <p class="truncate text-xs text-text-muted font-mono">{formatEmailLabel(getConnectionLabel(conn), $emailPrivacy)}</p>
+                      <p class="truncate text-[11px] text-text-muted font-mono leading-tight">{formatEmailLabel(getConnectionLabel(conn), $emailPrivacy)}</p>
                     {/if}
                     {#if getConnectionSecondaryLabel(conn)}
-                      <p class="truncate text-[11px] text-text-muted/80">{formatEmailLabel(getConnectionSecondaryLabel(conn), $emailPrivacy)}</p>
+                      <p class="truncate text-[10px] text-text-muted/80 leading-tight">{formatEmailLabel(getConnectionSecondaryLabel(conn), $emailPrivacy)}</p>
                     {/if}
                     {#if conn.provider === 'kiro'}
-                      <div class="mt-1 flex flex-wrap items-center gap-1">
-                        <span class="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
+                      <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                        <span class="rounded-full bg-brand-500/10 px-1.5 py-0.2 text-[9px] font-semibold text-brand-600 dark:text-brand-300">
                           {kiroMethodLabel(conn)}
                         </span>
                         {#if kiroRegion(conn)}
-                          <span class="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                          <span class="rounded-full bg-blue-500/10 px-1.5 py-0.2 text-[9px] font-semibold text-blue-600 dark:text-blue-400">
                             {kiroRegion(conn)}
                           </span>
                         {/if}
@@ -1416,9 +1417,9 @@
                             type="button"
                             onclick={() => copyArn(profileArn, conn.id)}
                             title={profileArn}
-                            class="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle px-2.5 py-0.5 text-[10px] text-text-muted transition-colors hover:text-primary cursor-pointer"
+                            class="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle px-2 py-0.2 text-[9px] text-text-muted transition-colors hover:text-primary cursor-pointer"
                           >
-                            <span class="material-symbols-outlined text-[12px]">
+                            <span class="material-symbols-outlined notranslate text-[11px]" translate="no">
                               {copiedArnId === conn.id ? 'check' : 'content_copy'}
                             </span>
                             <code class="truncate font-mono">{profileArn}</code>
@@ -1455,9 +1456,9 @@
                     title={resetCreditCount > 0
                       ? `Redeem a ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credit (${resetCreditCount} available)`
                       : `Check ${conn.provider === 'claude' ? 'Claude' : 'Codex'} reset credits`}
-                    class="flex h-7 min-w-8 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-6.5 min-w-7.5 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCreditCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
-                    <span class="material-symbols-outlined text-[14px]">restart_alt</span>
+                    <span class="material-symbols-outlined notranslate text-[13px]" translate="no">restart_alt</span>
                     <span>{resetCreditCount}</span>
                   </button>
                 {/if}
@@ -1473,9 +1474,9 @@
                     title={resetCardCount > 0
                       ? `Redeem a GLM reset card (${resetCardCount} available)`
                       : 'Check GLM reset cards'}
-                    class="flex h-7 min-w-8 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
+                    class="flex h-6.5 min-w-7.5 items-center justify-center gap-0.5 rounded-md border px-1.5 text-[10px] font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 {resetCardCount > 0 ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10' : 'border-border-subtle bg-surface-2 text-text-muted'}"
                   >
-                    <span class="material-symbols-outlined text-[14px]">restart_alt</span>
+                    <span class="material-symbols-outlined notranslate text-[13px]" translate="no">restart_alt</span>
                     <span>{resetCardCount}</span>
                   </button>
                 {/if}
@@ -1494,20 +1495,20 @@
                     onclick={() => toggleAutoPing(conn.id, conn.provider, !isAutoPingActive)}
                     title={AUTO_PING_TOOLTIPS[conn.provider]}
                     aria-label="Toggle auto-ping"
-                    class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-text-main'}"
+                    class="flex h-6.5 w-6.5 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {isAutoPingActive ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[15px]">bolt</span>
+                    <span class="material-symbols-outlined notranslate text-[14px]" translate="no">bolt</span>
                   </button>
                   <button
                     type="button"
                     onclick={() => (autoPingEditing = conn)}
                     title="Auto-ping schedule"
                     aria-label="Configure auto-ping schedule"
-                    class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
+                    class="flex h-6.5 w-6.5 items-center justify-center rounded-md transition-colors hover:bg-surface-3 cursor-pointer {hasSchedule
                       ? 'text-primary bg-primary/10'
                       : 'text-text-muted hover:text-text-main'}"
                   >
-                    <span class="material-symbols-outlined text-[15px]">schedule</span>
+                    <span class="material-symbols-outlined notranslate text-[14px]" translate="no">schedule</span>
                   </button>
                 {/if}
 
@@ -1518,12 +1519,12 @@
                   disabled={isLoading || rowBusy}
                   aria-label="Refresh quota"
                   title="Refresh quota"
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
+                  class="flex h-6.5 w-6.5 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-text-main disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[15px] {isLoading
+                    class="material-symbols-outlined notranslate text-[14px] {isLoading
                       ? 'animate-spin'
-                      : ''}">refresh</span
+                      : ''}" translate="no">refresh</span
                   >
                 </button>
 
@@ -1534,9 +1535,9 @@
                   disabled={rowBusy}
                   aria-label="Edit connection"
                   title="Edit connection"
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
+                  class="flex h-6.5 w-6.5 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-3 hover:text-primary disabled:opacity-50 cursor-pointer"
                 >
-                  <span class="material-symbols-outlined text-[15px]">edit</span>
+                  <span class="material-symbols-outlined notranslate text-[14px]" translate="no">edit</span>
                 </button>
 
                 <!-- Delete connection -->
@@ -1546,12 +1547,12 @@
                   disabled={rowBusy}
                   aria-label="Delete connection"
                   title="Delete connection"
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
+                  class="flex h-6.5 w-6.5 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 cursor-pointer"
                 >
                   <span
-                    class="material-symbols-outlined text-[15px] {deletingId === conn.id
+                    class="material-symbols-outlined notranslate text-[14px] {deletingId === conn.id
                       ? 'animate-pulse'
-                      : ''}">delete</span
+                      : ''}" translate="no">delete</span
                   >
                 </button>
 
@@ -1605,7 +1606,7 @@
               <div
                 class="mt-2 flex min-w-0 items-center gap-1 border-t border-border-subtle/60 pt-2 text-[10px] text-text-muted"
               >
-                <span class="material-symbols-outlined shrink-0 text-[14px]">visibility_off</span>
+                <span class="material-symbols-outlined notranslate shrink-0 text-[14px]" translate="no">visibility_off</span>
                 <span class="shrink-0">Hidden:</span>
                 <div
                   class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap pb-2"
