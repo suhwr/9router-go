@@ -30,12 +30,7 @@
     onRefresh
   }: Props = $props()
 
-  // Upstream parity (#4615): an empty list renders an empty state, it does not
-  // fall back to a hardcoded free-provider roster. Those nodes have no
-  // connection behind them, and upstream #4615 exists precisely because
-  // drawing them unconditionally made an idle map look busy — so a catalog
-  // fallback here would re-introduce the very bug that PR removed, on the one
-  // screen where nothing is actually in use.
+  // Displayed providers in deterministic order
   let displayProviders = $derived(providers)
 
   let activeProviderIds = $derived.by(() => {
@@ -51,6 +46,7 @@
   let activeCount = $derived(
     Math.max(activeRequests.reduce((sum, r) => sum + (r.count || 1), 0), hasPulse ? 1 : 0)
   )
+
   // Container sizing and fitView state
   let containerEl = $state<HTMLDivElement | null>(null)
   let containerWidth = $state(800)
@@ -63,19 +59,17 @@
   let isDragging = $state(false)
   let dragStart = { x: 0, y: 0 }
 
-  // Track image load errors to fallback to stylish initials
+  // Track image load errors to fallback to initials
   let imageErrors = $state<Record<string, boolean>>({})
 
-  // Upstream exact node radius formula:
-  // s = providers.length
-  // a = Math.max(320, 204 * s / (2 * Math.PI)) // rx
-  // i = Math.max(200, 0.55 * a)                 // ry
+  // Layout calculation: deterministic ellipse orbit with smooth curved paths
   let geometry = $derived.by(() => {
     const s = displayProviders.length
-    const rx = Math.max(320, (204 * s) / (2 * Math.PI))
-    const ry = Math.max(200, 0.55 * rx)
+    const rx = Math.max(300, (200 * s) / (2 * Math.PI))
+    const ry = Math.max(180, 0.54 * rx)
 
     const nodes = displayProviders.map((p, idx) => {
+      // Deterministic angle based on fixed index in sorted list
       const angle = -Math.PI / 2 + (2 * Math.PI * idx) / s
       const x = rx * Math.cos(angle)
       const y = ry * Math.sin(angle)
@@ -96,53 +90,31 @@
         (hasPulse && isProviderMatch(pulseProvider))
       const isLast = !isActive && Boolean(lastProvider) && isProviderMatch(lastProvider)
       const isError = !isActive && Boolean(errorProvider) && isProviderMatch(errorProvider)
-      // Edge handle coordinates based on angle
-      let sourceX = 0
-      let sourceY = 0
-      let targetX = x
-      let targetY = y
-      let isVertical = false
 
-      if (
-        Math.abs(angle + Math.PI / 2) < Math.PI / 4 ||
-        Math.abs(angle - (3 * Math.PI) / 2) < Math.PI / 4
-      ) {
-        // Top quadrant
-        sourceX = 0
-        sourceY = -22
-        targetX = x
-        targetY = y + 26
-        isVertical = true
-      } else if (Math.abs(angle - Math.PI / 2) < Math.PI / 4) {
-        // Bottom quadrant
-        sourceX = 0
-        sourceY = 22
-        targetX = x
-        targetY = y - 26
-        isVertical = true
-      } else if (angle > -Math.PI / 2 && angle < Math.PI / 2) {
-        // Right quadrant
-        sourceX = 65
-        sourceY = 0
-        targetX = x - 75
-        targetY = y
-        isVertical = false
-      } else {
-        // Left quadrant
-        sourceX = -65
-        sourceY = 0
-        targetX = x + 75
-        targetY = y
-        isVertical = false
-      }
+      // Calculate smooth curved connection path from router center to provider node
+      const rad = Math.atan2(y, x)
+      const routerR = 48
+      const sourceX = Math.cos(rad) * routerR
+      const sourceY = Math.sin(rad) * routerR
+      const nodeR = 64
+      const targetX = x - Math.cos(rad) * nodeR
+      const targetY = y - Math.sin(rad) * nodeR
 
-      const path = isVertical
-        ? `M ${sourceX} ${sourceY} C ${sourceX} ${(sourceY + targetY) / 2}, ${targetX} ${(sourceY + targetY) / 2}, ${targetX} ${targetY}`
-        : `M ${sourceX} ${sourceY} C ${(sourceX + targetX) / 2} ${sourceY}, ${(sourceX + targetX) / 2} ${targetY}, ${targetX} ${targetY}`
+      // Gentle organic arc bow: perpendicular offset to prevent harsh straight lines
+      const dx = targetX - sourceX
+      const dy = targetY - sourceY
+      const dist = Math.hypot(dx, dy) || 1
+      const normalX = -dy / dist
+      const normalY = dx / dist
+      const bowDirection = idx % 2 === 0 ? 1 : -1
+      const bowOffset = Math.min(24, Math.max(12, dist * 0.08)) * bowDirection
+      const midX = (sourceX + targetX) / 2
+      const midY = (sourceY + targetY) / 2
+      const cx = midX + normalX * bowOffset
+      const cy = midY + normalY * bowOffset
 
-      const returnPath = isVertical
-        ? `M ${targetX} ${targetY} C ${targetX} ${(sourceY + targetY) / 2}, ${sourceX} ${(sourceY + targetY) / 2}, ${sourceX} ${sourceY}`
-        : `M ${targetX} ${targetY} C ${(sourceX + targetX) / 2} ${targetY}, ${(sourceX + targetX) / 2} ${sourceY}, ${sourceX} ${sourceY}`
+      const curvePath = `M ${sourceX.toFixed(1)} ${sourceY.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${targetX.toFixed(1)} ${targetY.toFixed(1)}`
+      const returnPath = `M ${targetX.toFixed(1)} ${targetY.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${sourceX.toFixed(1)} ${sourceY.toFixed(1)}`
 
       const textIcon = (p.name || p.id || '?').slice(0, 2).toUpperCase()
 
@@ -153,10 +125,10 @@
         isActive,
         isLast,
         isError,
-        path,
+        curvePath,
         returnPath,
         textIcon,
-        color: p.color || '#6b7280'
+        color: p.color || '#3b82f6'
       }
     })
 
@@ -165,11 +137,11 @@
 
   function fitView() {
     if (!containerWidth || !containerHeight) return
-    const requiredWidth = 2 * geometry.rx + 220
-    const requiredHeight = 2 * geometry.ry + 120
-    const scaleX = (containerWidth - 32) / requiredWidth
-    const scaleY = (containerHeight - 32) / requiredHeight
-    zoom = Math.min(1.05, Math.max(0.15, Math.min(scaleX, scaleY)))
+    const requiredWidth = 2 * geometry.rx + 240
+    const requiredHeight = 2 * geometry.ry + 140
+    const scaleX = (containerWidth - 36) / requiredWidth
+    const scaleY = (containerHeight - 36) / requiredHeight
+    zoom = Math.min(1.05, Math.max(0.18, Math.min(scaleX, scaleY)))
     panX = 0
     panY = 0
   }
@@ -182,6 +154,7 @@
       fitView()
     }
   })
+
   function handlePointerDown(e: PointerEvent) {
     if ((e.target as HTMLElement).closest('button')) return
     isDragging = true
@@ -226,273 +199,285 @@
 </script>
 
 <div
-  bind:this={containerEl}
-  role="region"
-  aria-label="Provider topology map"
-  class="h-[320px] w-full min-w-0 rounded-lg border border-border bg-bg-subtle/30 sm:h-[480px] relative overflow-hidden select-none cursor-grab active:cursor-grabbing"
-  onpointerdown={handlePointerDown}
-  onpointermove={handlePointerMove}
-  onpointerup={handlePointerUp}
-  onpointercancel={handlePointerUp}
-  onwheel={handleWheel}
+  class="flex flex-col bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] overflow-hidden"
+  style="height: 480px"
 >
-  <!-- Interactive Viewport Layer (centered at 0, 0) -->
-  <div
-    class="absolute inset-0 pointer-events-none"
-    style="transform: translate({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px) scale({zoom}); transform-origin: 0 0;"
-  >
-    <!-- SVG Layer for Bezier Edges -->
-    <svg class="absolute inset-0 overflow-visible pointer-events-none" style="transform: translate(0, 0);">
+  <!-- Card Header with status and controls -->
+  <div class="px-4 py-3 border-b border-border-subtle bg-surface-2/30 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="p-1.5 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+        <span class="material-symbols-outlined text-[17px]">hub</span>
+      </div>
+      <div class="min-w-0">
+        <h2 class="text-xs font-bold text-text-main tracking-tight uppercase">Routing Topology</h2>
+        <p class="text-[11px] text-text-muted truncate">Gateway network & real-time routing</p>
+      </div>
+    </div>
 
-      <!-- Edges connecting router to provider nodes -->
-      {#each geometry.nodes as node (node.id)}
-        {#if node.isActive}
-          <!-- Expanding Shockwave Ripples from Provider Target -->
-          <g class="topology-shockwave-group">
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r="35"
-              fill="none"
-              stroke={node.color || '#22d3ee'}
-              opacity="0"
-            >
-              <animate attributeName="r" values="32;105" dur="1.1s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.85;0" dur="1.1s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="3.5;0.5" dur="1.1s" repeatCount="indefinite" />
-            </circle>
-          </g>
-
-          <!-- Bidirectional Neural Stream (Router <-> Provider) -->
-          <g class="topology-edge-electric">
-            <!-- 1. Outgoing Prompt Stream: Outer electric halo (Router -> Provider) -->
-            <path
-              d={node.path}
-              fill="none"
-              stroke="#22d3ee"
-              stroke-width="10"
-              stroke-opacity="0.32"
-              stroke-linecap="round"
-              class="topology-edge-halo"
-            />
-            <!-- 2. Mid plasma forward stream -->
-            <path
-              d={node.path}
-              fill="none"
-              stroke="#06b6d4"
-              stroke-width="4.5"
-              stroke-opacity="0.8"
-              stroke-linecap="round"
-              class="topology-edge-plasma"
-            />
-            <!-- 3. Hot core laser forward beam -->
-            <path
-              d={node.path}
-              fill="none"
-              stroke="#f8fafc"
-              stroke-width="2"
-              class="topology-edge-kame"
-            />
-
-            <!-- 4. Incoming Token Stream: Reverse emerald/gold plasma (Provider -> Router) -->
-            <path
-              d={node.returnPath}
-              fill="none"
-              stroke="#10b981"
-              stroke-width="3"
-              stroke-opacity="0.9"
-              class="topology-edge-return"
-            />
-            <path
-              d={node.returnPath}
-              fill="none"
-              stroke="#fef08a"
-              stroke-width="1.4"
-              class="topology-edge-return"
-            />
-
-            <!-- One forwarding token and one returning token per hop. The
-                 previous version ran three forward dots, four reverse dots and
-                 four sparks, and every one of them carried a drop-shadow
-                 filter, so each frame re-rasterised the filter region of every
-                 active edge (issue #381 follow-up). -->
-            <circle r="4.5" fill="#38bdf8" opacity="0.95">
-              <animateMotion dur="0.42s" repeatCount="indefinite" path={node.path} />
-            </circle>
-            <circle r="4.2" fill="#34d399" opacity="0.95">
-              <animateMotion dur="0.48s" repeatCount="indefinite" path={node.returnPath} />
-            </circle>
-          </g>
-        {:else if node.isLast}
-          <!-- Last Provider Active Edge (Amber) -->
-          <path
-            d={node.path}
-            fill="none"
-            stroke="#f59e0b"
-            stroke-width="2"
-            opacity="0.7"
-          />
-        {:else if node.isError}
-          <!-- Error Edge (Red) -->
-          <path
-            d={node.path}
-            fill="none"
-            stroke="#ef4444"
-            stroke-width="2.5"
-            opacity="0.9"
-          />
-        {:else}
-          <!-- Inactive Subtle Edge -->
-          <path
-            d={node.path}
-            fill="none"
-            stroke="var(--color-border)"
-            stroke-width="1"
-            opacity="0.3"
-          />
-        {/if}
-      {/each}
-      <!-- Center Router Absorption Rings when activeCount > 0 -->
-      {#if activeCount > 0}
-        <g class="topology-router-absorption">
-          <circle
-            cx="0"
-            cy="0"
-            r="30"
-            fill="none"
-            stroke="#22d3ee"
-            stroke-dasharray="5 5"
-            opacity="0"
-          >
-            <animate attributeName="r" values="55;20" dur="0.9s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0;0.8;0" dur="0.9s" repeatCount="indefinite" />
-            <animate attributeName="stroke-width" values="1;2.5;0.5" dur="0.9s" repeatCount="indefinite" />
-          </circle>
-          <circle
-            cx="0"
-            cy="0"
-            r="30"
-            fill="none"
-            stroke="#facc15"
-            stroke-dasharray="4 6"
-            opacity="0"
-          >
-            <animate attributeName="r" values="65;24" dur="1.1s" begin="0.45s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0;0.7;0" dur="1.1s" begin="0.45s" repeatCount="indefinite" />
-            <animate attributeName="stroke-width" values="0.8;2;0.5" dur="1.1s" begin="0.45s" repeatCount="indefinite" />
-          </circle>
-        </g>
-      {/if}
-    </svg>
-
-    <!-- HTML Router Node (Center 0, 0) -->
-    <div
-      class="absolute z-10 flex items-center justify-center px-5 py-3 rounded-xl border-2 min-w-[130px] {activeCount > 0 ? 'topology-router-core border-yellow-300 bg-gradient-to-br from-primary/30 via-yellow-400/20 to-cyan-400/25' : 'border-primary bg-primary/5 shadow-md'} pointer-events-auto"
-      style="left: 0px; top: 0px; transform: translate(-50%, -50%);"
-    >
-      <img
-        src={branding.config.appLogoUrl || branding.config.faviconUrl || '/favicon.svg'}
-        alt={branding.config.appName || 'Gateway'}
-        class="w-6 h-6 mr-2 object-contain {activeCount > 0 ? 'topology-router-icon' : ''}"
-        loading="lazy"
-        decoding="async"
-        onerror={(e) => {
-          ;(e.currentTarget as HTMLImageElement).src = '/favicon.svg'
-        }}
-      />
-      <span class="text-sm font-bold {activeCount > 0 ? 'topology-router-label text-yellow-300' : 'text-primary'}">
-        {branding.config.appName || 'Gateway'}
-      </span>
-      {#if activeCount > 0}
-        <span class="ml-2 px-1.5 py-0.5 rounded-full bg-yellow-400 text-black text-xs font-bold topology-router-badge">
-          {activeCount}
+    <!-- Right Header Actions -->
+    <div class="flex items-center gap-2 shrink-0">
+      <div
+        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium {activeCount > 0
+          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+          : 'bg-surface text-text-muted border border-border-subtle'}"
+      >
+        <span
+          class="size-1.5 rounded-full {activeCount > 0
+            ? 'bg-emerald-500 animate-pulse'
+            : 'bg-text-muted/50'}"
+        ></span>
+        <span>
+          {activeCount > 0
+            ? `${activeCount} active stream${activeCount > 1 ? 's' : ''}`
+            : `${displayProviders.length} connected`}
         </span>
+      </div>
+
+      <div class="flex items-center rounded-lg border border-border bg-surface p-0.5">
+        <button
+          type="button"
+          onclick={() => (zoom = Math.min(2.2, zoom * 1.15))}
+          class="p-1 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors cursor-pointer flex items-center justify-center"
+          title="Zoom In"
+          aria-label="Zoom In"
+        >
+          <span class="material-symbols-outlined text-[16px]">add</span>
+        </button>
+        <button
+          type="button"
+          onclick={() => (zoom = Math.max(0.2, zoom / 1.15))}
+          class="p-1 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors cursor-pointer flex items-center justify-center"
+          title="Zoom Out"
+          aria-label="Zoom Out"
+        >
+          <span class="material-symbols-outlined text-[16px]">remove</span>
+        </button>
+        <button
+          type="button"
+          onclick={fitView}
+          class="p-1 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors cursor-pointer flex items-center justify-center"
+          title="Reset View"
+          aria-label="Reset View"
+        >
+          <span class="material-symbols-outlined text-[16px]">crop_free</span>
+        </button>
+      </div>
+
+      {#if onRefresh}
+        <button
+          type="button"
+          onclick={onRefresh}
+          class="p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer"
+          title="Refresh topology"
+          aria-label="Refresh topology"
+        >
+          <span class="material-symbols-outlined text-[16px]">refresh</span>
+        </button>
       {/if}
     </div>
-    <!-- HTML Provider Nodes -->
-    {#each geometry.nodes as node (node.id)}
+  </div>
+
+  <!-- Interactive Topology Canvas -->
+  <div
+    bind:this={containerEl}
+    role="region"
+    aria-label="Provider topology map"
+    class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing bg-bg-subtle/20"
+    style="background-image: radial-gradient(circle, var(--color-border) 1px, transparent 1px); background-size: 24px 24px;"
+    onpointerdown={handlePointerDown}
+    onpointermove={handlePointerMove}
+    onpointerup={handlePointerUp}
+    onpointercancel={handlePointerUp}
+    onwheel={handleWheel}
+  >
+    <!-- Centered Viewport Layer -->
+    <div
+      class="absolute inset-0 pointer-events-none"
+      style="transform: translate({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px) scale({zoom}); transform-origin: 0 0;"
+    >
+      <!-- SVG Vector Layer for Orbit & Curved Edges -->
+      <svg class="absolute inset-0 overflow-visible pointer-events-none" style="transform: translate(0, 0);">
+        <!-- Subtle architectural dashed orbit ring (replaces chaotic straight spokes) -->
+        {#if displayProviders.length > 0}
+          <ellipse
+            cx="0"
+            cy="0"
+            rx={geometry.rx}
+            ry={geometry.ry}
+            fill="none"
+            stroke="var(--color-border)"
+            stroke-width="1.2"
+            stroke-dasharray="5 7"
+            opacity="0.4"
+          />
+        {/if}
+
+        <!-- Active, Recent, or Error Curved Stream Edges -->
+        {#each geometry.nodes as node (node.id)}
+          {#if node.isActive}
+            <g class="topology-active-stream">
+              <!-- Soft outer glow path -->
+              <path
+                d={node.curvePath}
+                fill="none"
+                stroke={node.color || '#3b82f6'}
+                stroke-width="6"
+                stroke-opacity="0.25"
+                stroke-linecap="round"
+              />
+              <!-- Animated flowing forward beam -->
+              <path
+                d={node.curvePath}
+                fill="none"
+                stroke={node.color || '#3b82f6'}
+                stroke-width="2.5"
+                stroke-linecap="round"
+                class="topology-edge-flow"
+              />
+              <!-- Return token stream -->
+              <path
+                d={node.returnPath}
+                fill="none"
+                stroke="#10b981"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                class="topology-edge-flow-reverse"
+              />
+              <!-- Smooth flowing token indicators -->
+              <circle r="4" fill="#38bdf8" opacity="0.95">
+                <animateMotion dur="1.2s" repeatCount="indefinite" path={node.curvePath} />
+              </circle>
+              <circle r="3.5" fill="#34d399" opacity="0.95">
+                <animateMotion dur="1.4s" repeatCount="indefinite" path={node.returnPath} />
+              </circle>
+            </g>
+          {:else if node.isLast}
+            <!-- Warm amber recent trace -->
+            <path
+              d={node.curvePath}
+              fill="none"
+              stroke="#f59e0b"
+              stroke-width="2"
+              stroke-dasharray="4 4"
+              opacity="0.65"
+            />
+          {:else if node.isError}
+            <!-- Red error trace -->
+            <path
+              d={node.curvePath}
+              fill="none"
+              stroke="#ef4444"
+              stroke-width="2.2"
+              stroke-dasharray="4 4"
+              opacity="0.85"
+            />
+          {/if}
+        {/each}
+      </svg>
+
+      <!-- Center Gateway Node (0, 0) -->
       <div
-        class="absolute flex items-center gap-2.5 px-4 py-2.5 rounded-lg border-2 transition-all duration-300 bg-bg shadow-sm pointer-events-auto {node.isActive ? 'topology-node-active-bounce' : ''}"
-        style="left: {node.x}px; top: {node.y}px; transform: translate(-50%, -50%); border-color: {node.isActive ? node.color : node.isLast ? '#f59e0b' : 'var(--color-border)'}; box-shadow: {node.isActive ? `0 0 0 2px ${node.color}33` : node.isLast ? '0 0 8px rgba(245, 158, 11, 0.25)' : 'none'}; min-width: 150px;"
+        class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 min-w-[130px] {activeCount > 0
+          ? 'topology-router-core border-primary bg-surface shadow-lg'
+          : 'border-border bg-surface shadow-sm'} pointer-events-auto transition-all"
+        style="left: 0px; top: 0px; transform: translate(-50%, -50%);"
       >
+        <img
+          src={branding.config.appLogoUrl || branding.config.faviconUrl || '/favicon.svg'}
+          alt={branding.config.appName || 'Gateway'}
+          class="w-5 h-5 mr-2 object-contain shrink-0"
+          loading="lazy"
+          decoding="async"
+          onerror={(e) => {
+            ;(e.currentTarget as HTMLImageElement).src = '/favicon.svg'
+          }}
+        />
+        <span class="text-xs font-bold {activeCount > 0 ? 'text-primary' : 'text-text-main'} truncate">
+          {branding.config.appName || 'Gateway'}
+        </span>
+        {#if activeCount > 0}
+          <span class="ml-2 px-1.5 py-0.2 rounded-full bg-primary text-white text-[10px] font-bold">
+            {activeCount}
+          </span>
+        {/if}
+      </div>
+
+      <!-- Provider Nodes stationed deterministically along orbit -->
+      {#each geometry.nodes as node (node.id)}
         <div
-          class="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
-          style="background-color: {node.color}15;"
+          class="absolute flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all duration-300 bg-surface/95 backdrop-blur shadow-xs hover:shadow-md pointer-events-auto"
+          style="left: {node.x}px; top: {node.y}px; transform: translate(-50%, -50%); border-color: {node.isActive
+            ? (node.color || '#3b82f6')
+            : node.isLast
+              ? '#f59e0b'
+              : 'var(--color-border)'}; box-shadow: {node.isActive
+            ? `0 0 12px ${node.color}33, 0 2px 4px rgba(0,0,0,0.06)`
+            : node.isLast
+              ? '0 0 8px rgba(245, 158, 11, 0.2)'
+              : 'none'}; min-width: 140px; max-width: 210px;"
         >
-          {#if !imageErrors[node.id]}
-            <ProviderArtwork id={node.id} class="w-6 h-6 rounded-sm object-contain" />
-          {:else}
-            <span class="text-sm font-bold" style="color: {node.color};">
-              {node.textIcon}
+          <div
+            class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
+            style="background-color: {node.color}18;"
+          >
+            {#if !imageErrors[node.id]}
+              <ProviderArtwork id={node.id} class="w-5 h-5 rounded-sm object-contain" />
+            {:else}
+              <span class="text-xs font-bold" style="color: {node.color};">
+                {node.textIcon}
+              </span>
+            {/if}
+          </div>
+          <span
+            class="text-xs font-semibold truncate flex-1"
+            style="color: {node.isActive ? (node.color || 'var(--color-text)') : 'var(--color-text)'}"
+            title={node.name}
+          >
+            {node.name}
+          </span>
+
+          <!-- Active / Status Badge -->
+          {#if node.isActive}
+            <div class="flex items-center gap-1 shrink-0">
+              <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                Active
+              </span>
+            </div>
+          {:else if node.isLast}
+            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0">
+              Recent
             </span>
           {/if}
         </div>
-        <span
-          class="text-base font-medium truncate max-w-[200px]"
-          style="color: {node.isActive ? node.color : 'var(--color-text)'}"
-          title={node.name}
-        >
-          {node.name}
-        </span>
-
-        <!-- Active indicator -->
-        {#if node.isActive}
-          <div class="flex items-center gap-1.5 ml-auto shrink-0">
-            <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              Live
-            </span>
-            <span class="relative flex h-2 w-2">
-              <span
-                class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-                style="background-color: {node.color};"
-              ></span>
-              <span
-                class="relative inline-flex rounded-full h-2 w-2"
-                style="background-color: {node.color};"
-              ></span>
-            </span>
-          </div>
-        {/if}
-      </div>
-    {/each}
-  </div>
-  <!-- Upstream empty state: nothing has been used in the period, so there is
-       nothing honest to draw. The router core and the zoom controls stay put so
-       the card keeps its shape instead of collapsing. -->
-  {#if displayProviders.length === 0}
-    <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-sm text-text-muted">
-      No providers connected
+      {/each}
     </div>
-  {/if}
 
-  <!-- Bottom-left React Flow style controls -->
-  <div class="absolute bottom-4 left-4 z-20 flex flex-col rounded-md border border-border bg-surface/90 shadow-md overflow-hidden backdrop-blur">
-    <button
-      type="button"
-      onclick={() => (zoom = Math.min(2.5, zoom * 1.2))}
-      class="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors border-b border-border cursor-pointer flex items-center justify-center"
-      title="Zoom In"
-      aria-label="Zoom In"
-    >
-      <span class="material-symbols-outlined text-[16px]">add</span>
-    </button>
-    <button
-      type="button"
-      onclick={() => (zoom = Math.max(0.2, zoom / 1.2))}
-      class="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors border-b border-border cursor-pointer flex items-center justify-center"
-      title="Zoom Out"
-      aria-label="Zoom Out"
-    >
-      <span class="material-symbols-outlined text-[16px]">remove</span>
-    </button>
-    <button
-      type="button"
-      onclick={fitView}
-      class="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer flex items-center justify-center"
-      title="Fit View"
-      aria-label="Fit View"
-    >
-      <span class="material-symbols-outlined text-[16px]">crop_free</span>
-    </button>
+    <!-- Empty State -->
+    {#if displayProviders.length === 0}
+      <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-xs text-text-muted">
+        No providers connected or routed in this period.
+      </div>
+    {/if}
+
+    <!-- Bottom Legend & Helper Info -->
+    <div class="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
+      <div class="flex items-center gap-3 px-2.5 py-1 rounded-lg bg-surface/90 border border-border-subtle/80 backdrop-blur text-[10px] text-text-muted shadow-xs pointer-events-auto">
+        <span class="flex items-center gap-1.5">
+          <span class="size-2 rounded-full bg-emerald-500"></span>
+          <span>Active</span>
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="size-2 rounded-full bg-amber-500"></span>
+          <span>Recent</span>
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="size-2 rounded-full bg-text-muted/40"></span>
+          <span>Connected</span>
+        </span>
+      </div>
+      <span class="hidden sm:inline-block text-[10px] text-text-muted/60 bg-surface/60 px-2 py-0.5 rounded backdrop-blur">
+        Drag to pan · Scroll to zoom
+      </span>
+    </div>
   </div>
 </div>

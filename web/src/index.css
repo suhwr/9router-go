@@ -277,84 +277,31 @@ body {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-/* Topology: router card pulse + electric edge beam (matching upstream 9Router).
-   The pulse and the icon shake animate transform only. They used to animate a
-   three-layer box-shadow and a drop-shadow filter as well, which made the
-   browser re-rasterise a blurred shadow and a filter region on every frame for
-   as long as a request was in flight — measured at ~1.1 s of main-thread task
-   time per 5 s on the Usage page, of which this card was ~95% (issue #381
-   follow-up). */
-@keyframes topology-router-pulse {
+/* Topology: smooth, elegant gateway routing micro-animations */
+@keyframes topology-router-glow {
   0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 14px rgba(var(--primary-rgb, 59, 130, 246), 0.2), 0 0 28px rgba(var(--primary-rgb, 59, 130, 246), 0.1);
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.05);
+    box-shadow: 0 0 22px rgba(var(--primary-rgb, 59, 130, 246), 0.4), 0 0 44px rgba(var(--primary-rgb, 59, 130, 246), 0.2);
   }
 }
-@keyframes topology-router-icon-shake {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(-5deg) scale(1.08); }
-  75% { transform: rotate(5deg) scale(1.08); }
+@keyframes topology-edge-flow {
+  to { stroke-dashoffset: -40; }
 }
-@keyframes topology-router-label-flicker {
-  0%, 100% { text-shadow: 0 0 6px #fde047, 0 0 12px #22d3ee; }
-  50% { text-shadow: 0 0 10px #fff, 0 0 18px #facc15; }
-}
-@keyframes topology-edge-dash {
-  to { stroke-dashoffset: -36; }
-}
-@keyframes topology-edge-flicker {
-  0%, 100% { opacity: 0.85; }
-  40% { opacity: 1; }
-  55% { opacity: 0.55; }
-  70% { opacity: 0.95; }
+@keyframes topology-edge-flow-reverse {
+  to { stroke-dashoffset: 40; }
 }
 .topology-router-core {
-  animation: topology-router-pulse 0.75s ease-in-out infinite !important;
-  border-color: #fde047 !important;
-  /* Static glow: painted once instead of on every frame of the pulse. */
-  box-shadow:
-    0 0 16px rgba(253, 224, 71, 0.4),
-    0 0 32px rgba(34, 211, 238, 0.35),
-    inset 0 0 12px rgba(250, 204, 21, 0.3);
+  animation: topology-router-glow 2.4s ease-in-out infinite !important;
 }
-.topology-router-icon {
-  animation: topology-router-icon-shake 0.45s ease-in-out infinite;
+.topology-edge-flow {
+  stroke-dasharray: 6 6;
+  animation: topology-edge-flow 1.2s linear infinite;
 }
-.topology-router-label {
-  animation: topology-router-label-flicker 0.7s ease-in-out infinite;
-}
-.topology-edge-kame {
-  stroke-dasharray: 8 6;
-  animation: topology-edge-dash 0.22s linear infinite;
-}
-.topology-edge-halo {
-  animation: topology-edge-flicker 0.18s steps(2) infinite;
-}
-.topology-edge-plasma {
-  stroke-dasharray: 14 10;
-  animation: topology-edge-dash 0.18s linear infinite, topology-edge-flicker 0.22s steps(3) infinite;
-}
-
-/* Bidirectional neural streams & shockwave impacts */
-@keyframes topology-edge-dash-reverse {
-  to { stroke-dashoffset: 36; }
-}
-@keyframes topology-node-bounce {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1.02);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.06);
-  }
-}
-.topology-edge-return {
-  stroke-dasharray: 6 8;
-  animation: topology-edge-dash-reverse 0.22s linear infinite, topology-edge-flicker 0.28s steps(3) infinite;
-}
-.topology-node-active-bounce {
-  animation: topology-node-bounce 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite !important;
+.topology-edge-flow-reverse {
+  stroke-dasharray: 5 5;
+  animation: topology-edge-flow-reverse 1.5s linear infinite;
 }
 
 /* Changelog markdown body styles */

@@ -12,7 +12,6 @@
 // browser draws the sidebar, and an operator who sets them on one machine has
 // not asked for them on another.
 let favoritesEnabled = $state(true)
-let iconRail = $state(false)
 
 const FAVORITES_KEY = 'navFavoritesEnabled'
 const ICON_RAIL_KEY = 'navIconRail'
@@ -38,7 +37,11 @@ function writeBool(key: string, on: boolean): void {
 /** Reads both keys once, at boot. */
 export function loadSidebarPrefs(): void {
   favoritesEnabled = readBool(FAVORITES_KEY, true)
-  iconRail = readBool(ICON_RAIL_KEY, false)
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(ICON_RAIL_KEY)
+    } catch {}
+  }
 }
 
 export function isFavoritesEnabled(): boolean {
@@ -51,10 +54,13 @@ export function setFavoritesEnabled(on: boolean): void {
 }
 
 export function isIconRailEnabled(): boolean {
-  return iconRail
+  return false
 }
 
-export function setIconRailEnabled(on: boolean): void {
-  iconRail = on
-  writeBool(ICON_RAIL_KEY, on)
+export function setIconRailEnabled(_on?: boolean): void {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(ICON_RAIL_KEY)
+    } catch {}
+  }
 }

@@ -7,7 +7,6 @@
   import { type ActiveTab } from '../lib/router'
   import { promptInstall, subscribeInstallPrompt } from '../lib/pwa'
   import { i18n } from '../lib/i18n.svelte'
-  import { isIconRailEnabled, setIconRailEnabled } from '../lib/sidebarPrefs.svelte'
 
   let {
     activeTab = 'endpoint',
@@ -256,17 +255,6 @@
       </button>
     {/if}
 
-    <button
-      type="button"
-      onclick={() => setIconRailEnabled(!isIconRailEnabled())}
-      class="hidden lg:flex p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors cursor-pointer"
-      title={isIconRailEnabled() ? 'Expand sidebar' : 'Collapse sidebar'}
-      aria-label="Toggle sidebar"
-    >
-      <span class="material-symbols-outlined text-[20px]">
-        {isIconRailEnabled() ? 'dock_to_right' : 'dock_to_left'}
-      </span>
-    </button>
 
     {#if activeTab === 'connections' && selectedProvider}
       <div class="flex items-center gap-2 min-w-0">

@@ -34,9 +34,7 @@
   } from '../lib/displayPrefs'
   import {
     isFavoritesEnabled,
-    isIconRailEnabled,
     setFavoritesEnabled,
-    setIconRailEnabled,
   } from '../lib/sidebarPrefs.svelte'
   import {
     USAGE_PANEL_FIXED_POSITION,
@@ -180,9 +178,6 @@
   // the section is empty until something is pinned, so an untouched install
   // gains nothing and loses nothing.
   let favoritesEnabled = $state(isFavoritesEnabled())
-  // Collapse to icons (navIconRail, localStorage). Off by default because it
-  // hides every label at once, which is a layout to opt into.
-  let iconRail = $state(isIconRailEnabled())
 
   // The heavy blocks below — the currency rate grid, the per-panel Usage list
   // with its arrangement controls, and the sidebar feature-visibility row — stay
@@ -897,24 +892,6 @@
         </div>
       </div>
     </div>
-
-    <button
-      type="button"
-      onclick={handleSaveAll}
-      disabled={isSavingSettings}
-      class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs transition cursor-pointer shadow-md shadow-brand-500/20"
-    >
-      {#if isSavingSettings}
-        <Loader2 class="w-3.5 h-3.5 animate-spin" />
-        <span>Saving...</span>
-      {:else if saveSuccess}
-        <Check class="w-3.5 h-3.5" />
-        <span>Settings Saved!</span>
-      {:else}
-        <Save class="w-3.5 h-3.5" />
-        <span>Save Changes</span>
-      {/if}
-    </button>
   </div>
 
   <!-- SETTINGS TABS NAVIGATION -->
@@ -1987,24 +1964,6 @@
           }}
         />
       </div>
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-xs font-semibold text-text-main">Collapse to icons</p>
-          <p class="text-[11px] text-text-subtle">
-            Shrink the sidebar to a 56px icon rail. Every label is replaced by its icon with a
-            tooltip, which frees the width for the page beside it.
-          </p>
-        </div>
-        <Toggle
-          checked={iconRail}
-          size="sm"
-          label="Collapse to icons"
-          onChange={(val) => {
-            setIconRailEnabled(val)
-            iconRail = val
-          }}
-        />
-      </div>
       <div class="flex items-center justify-between gap-3 border-t border-border pt-3">
         <div class="min-w-0">
           <p class="text-xs font-semibold text-text-main">Animation level</p>
@@ -2383,21 +2342,48 @@
     {/if}
     {/if}
 
-    <!-- Save reminder: an operator who flipped a switch must not walk away
-         without saving. It appears on a change and hides itself again after a
-         few seconds (markUnsaved). -->
-    {#if showSaveHint}
-      <div
-        role="status"
-        class="fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-[10px] border border-border bg-surface-2 px-4 py-3 shadow-[var(--shadow-elev)]"
-      >
-        <span class="text-xs text-text-muted">Unsaved changes</span>
-        <Button variant="primary" onclick={handleSaveAll} loading={isSavingSettings}>
-          <Save class="w-3.5 h-3.5" />
-          <span>Save</span>
-        </Button>
+    <!-- Persistent Floating Save Action Bar (Bottom Right) -->
+    <div
+      role="status"
+      class="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl border border-border/80 bg-surface/95 backdrop-blur-xl px-4 py-2.5 shadow-[var(--shadow-elev)] transition-all duration-200"
+    >
+      <div class="flex items-center gap-2 pr-1 border-r border-border/60">
+        {#if isSavingSettings}
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+          </span>
+          <span class="text-xs font-medium text-text-muted">Saving changes...</span>
+        {:else if saveSuccess}
+          <span class="size-2 rounded-full bg-emerald-500"></span>
+          <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Settings saved!</span>
+        {:else if showSaveHint}
+          <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+          <span class="text-xs font-medium text-amber-600 dark:text-amber-400">Unsaved changes</span>
+        {:else}
+          <span class="size-2 rounded-full bg-text-muted/40"></span>
+          <span class="text-xs font-medium text-text-muted">Settings synchronized</span>
+        {/if}
       </div>
-    {/if}
+
+      <button
+        type="button"
+        onclick={handleSaveAll}
+        disabled={isSavingSettings}
+        class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs transition cursor-pointer shadow-sm hover:shadow-md shadow-brand-500/20"
+      >
+        {#if isSavingSettings}
+          <Loader2 class="w-3.5 h-3.5 animate-spin" />
+          <span>Saving...</span>
+        {:else if saveSuccess}
+          <Check class="w-3.5 h-3.5" />
+          <span>Saved</span>
+        {:else}
+          <Save class="w-3.5 h-3.5" />
+          <span>Save Changes</span>
+        {/if}
+      </button>
+    </div>
 
     <Modal
       isOpen={dbAuthOpen}

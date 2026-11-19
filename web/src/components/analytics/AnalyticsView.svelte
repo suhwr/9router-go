@@ -520,6 +520,9 @@
       if (usedInPeriod(f)) addProvider(f, 'default')
     }
 
+    // Deterministic sorting so node positions never jump or shuffle when active requests fire
+    list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
+
     return list
   })
 </script>
@@ -636,7 +639,7 @@
           {/if}
         </Card>
       {:else if block.key === 'overview.topology+overview.recent'}
-        <div class="grid min-w-0 grid-cols-1 items-stretch gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div class="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           {@render topologyMap()}
           {@render recentRequestsCard()}
         </div>
@@ -745,11 +748,22 @@
 
 {#snippet recentRequestsCard()}
   <div
-    class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] p-4 flex min-w-0 flex-col overflow-hidden"
+    class="flex flex-col bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] overflow-hidden"
     style="height: 480px"
   >
-    <div class="px-1 py-2 border-b border-border shrink-0">
-      <span class="text-xs font-semibold text-text-muted uppercase tracking-wide">Recent Requests</span>
+    <div class="px-4 py-3 border-b border-border-subtle bg-surface-2/30 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="p-1.5 rounded-lg bg-surface-2 text-text-muted flex items-center justify-center">
+          <span class="material-symbols-outlined text-[17px]">history</span>
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-xs font-bold text-text-main tracking-tight uppercase">Recent Requests</h2>
+          <p class="text-[11px] text-text-muted truncate">Latest stream executions</p>
+        </div>
+      </div>
+      <span class="text-[10px] text-text-muted bg-surface px-2 py-0.5 rounded-full border border-border-subtle">
+        {stats.recentRequests?.length || 0} recent
+      </span>
     </div>
 
     {#if !stats.recentRequests || stats.recentRequests.length === 0}
@@ -757,7 +771,7 @@
         No requests recorded yet.
       </div>
     {:else}
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-2">
         <table class="w-full table-fixed min-w-[280px] border-collapse text-xs">
           <colgroup>
             <col class="w-[20px]" />
