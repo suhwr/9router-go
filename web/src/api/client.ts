@@ -977,6 +977,20 @@ export interface RequireLoginResponse {
   hasPassword?: boolean
   authMode?: string
   authenticated?: boolean
+  appName?: string
+  appSubtitle?: string
+  appLogoUrl?: string
+  faviconUrl?: string
+  loginTitle?: string
+  loginSubtitle?: string
+  loginBgUrl?: string
+  loginBgBlur?: boolean
+  loginHideDefaultPasswordHint?: boolean
+  hideBrandFooter?: boolean
+  footerText?: string
+  accentColor?: string
+  loginCardStyle?: string
+  [key: string]: unknown
 }
 
 export interface LoginResponse {
@@ -2740,6 +2754,7 @@ export const api = {
       if (res.ok) {
         const data = await res.json()
         return {
+          ...data,
           requireLogin: !!data.requireLogin,
           tunnelDashboardAccess: !!data.tunnelDashboardAccess,
           tunnelUrl: data.tunnelUrl,
@@ -2753,6 +2768,7 @@ export const api = {
       if (res.ok) {
         const data = await res.json()
         return {
+          ...data,
           requireLogin: !!data.requireLogin,
           hasPassword: !!data.hasPassword,
           authMode: data.authMode,

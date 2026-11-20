@@ -187,11 +187,24 @@ func (h *DashboardHandler) HandleRequireLogin(w http.ResponseWriter, r *http.Req
 	}
 	noStore(w)
 	handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
-		"requireLogin":          auth.RequireLogin(h.Repo),
-		"tunnelDashboardAccess": tunnelAccess,
-		"tunnelUrl":             stringOr(raw, "tunnelUrl", ""),
-		"tailscaleUrl":          stringOr(raw, "tailscaleUrl", ""),
-		"authenticated":         auth.SessionValid(r),
+		"requireLogin":                 auth.RequireLogin(h.Repo),
+		"tunnelDashboardAccess":        tunnelAccess,
+		"tunnelUrl":                    stringOr(raw, "tunnelUrl", ""),
+		"tailscaleUrl":                 stringOr(raw, "tailscaleUrl", ""),
+		"authenticated":                auth.SessionValid(r),
+		"appName":                      stringOr(raw, "appName", ""),
+		"appSubtitle":                  stringOr(raw, "appSubtitle", ""),
+		"appLogoUrl":                   stringOr(raw, "appLogoUrl", ""),
+		"faviconUrl":                   stringOr(raw, "faviconUrl", ""),
+		"loginTitle":                   stringOr(raw, "loginTitle", ""),
+		"loginSubtitle":                stringOr(raw, "loginSubtitle", ""),
+		"loginBgUrl":                   stringOr(raw, "loginBgUrl", ""),
+		"loginBgBlur":                  boolOr(raw, "loginBgBlur", false),
+		"loginHideDefaultPasswordHint": boolOr(raw, "loginHideDefaultPasswordHint", false),
+		"hideBrandFooter":              boolOr(raw, "hideBrandFooter", false),
+		"footerText":                   stringOr(raw, "footerText", ""),
+		"accentColor":                  stringOr(raw, "accentColor", ""),
+		"loginCardStyle":               stringOr(raw, "loginCardStyle", "glass"),
 	})
 }
 

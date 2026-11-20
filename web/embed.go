@@ -1,14 +1,24 @@
 package web
 
 import (
+	"bytes"
+	"compress/gzip"
 	"embed"
+	"encoding/json"
+	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"mime"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 func init() {
@@ -18,21 +28,18 @@ func init() {
 //go:embed dist/*
 var DistFS embed.FS
 
+// SettingsProvider supplies the gateway's active configuration map.
+type SettingsProvider func() map[string]any
+
 // Handler returns an http.Handler that serves the embedded SPA files with index.html fallback for client-side routing.
-//
-// The assets are served pre-compressed. `web/scripts/precompress.ts` writes a
-// `.br` and a `.gz` sibling next to every compressible file at build time,
-// and this handler picks the best variant the client's Accept-Encoding
-// allows. The reason is the deployment this gateway ships into: the dashboard
-// is served from the gateway itself, so the bundle crosses the operator's own
-// link — often a phone on mobile data — and an uncompressed 1.2 MB script is
-// the single largest thing in the first paint.
-//
-// Compressing at request time was the alternative and was rejected: this
-// gateway runs on a 1 vCPU box and already spends its CPU on streaming LLM
-// responses, and the bundle never changes between releases, so paying the
-// compression cost per request buys nothing the build-time variant did not.
 func Handler() http.Handler {
+	return HandlerWithSettings(nil)
+}
+
+// HandlerWithSettings returns an http.Handler that serves the embedded SPA files,
+// dynamically injecting operator branding (title, meta headers, OpenGraph, Twitter cards,
+// custom favicon redirects, and webmanifest) when settingsProvider is provided.
+func HandlerWithSettings(settingsFn SettingsProvider) http.Handler {
 	subFS, err := fs.Sub(DistFS, "dist")
 	if err != nil {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,10 +47,41 @@ func Handler() http.Handler {
 		})
 	}
 
+	cache := &brandingIndexCache{}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if name == "" {
 			name = "index.html"
+		}
+
+		// Dynamic Favicon redirect if a custom favicon or logo is configured
+		if settingsFn != nil && (name == "favicon.ico" || name == "favicon.svg") {
+			settings := settingsFn()
+			fav := getSettingString(settings, "faviconUrl")
+			if fav == "" {
+				fav = getSettingString(settings, "appLogoUrl")
+			}
+			if fav != "" && fav != "/favicon.ico" && fav != "/favicon.svg" && fav != name && fav != "/"+name {
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				http.Redirect(w, r, fav, http.StatusTemporaryRedirect)
+				return
+			}
+		}
+
+		// Dynamic webmanifest if custom branding is configured
+		if settingsFn != nil && (name == "manifest.webmanifest" || name == "manifest.json") {
+			settings := settingsFn()
+			if hasCustomBranding(settings) {
+				serveDynamicManifest(w, r, settings)
+				return
+			}
+		}
+
+		// Dynamic index.html entry document or client-side routing fallback
+		if settingsFn != nil && (name == "index.html" || isSPARoute(subFS, name)) {
+			serveDynamicIndex(w, r, subFS, settingsFn, cache)
+			return
 		}
 
 		// A file in the embedded FS is served as itself: the CSS, the JS, the
@@ -73,6 +111,17 @@ func Handler() http.Handler {
 	})
 }
 
+// isSPARoute reports whether `name` represents a client-side routing fallback.
+func isSPARoute(subFS fs.FS, name string) bool {
+	if isFile(subFS, name) {
+		return false
+	}
+	if strings.Contains(path.Base(name), ".") && !strings.HasSuffix(name, ".html") {
+		return false
+	}
+	return isFile(subFS, "index.html")
+}
+
 // isFile reports whether `name` is a regular file in the embedded FS.
 func isFile(subFS fs.FS, name string) bool {
 	f, err := subFS.Open(name)
@@ -88,12 +137,6 @@ func isFile(subFS fs.FS, name string) bool {
 }
 
 // applyAssetHeaders sets the cache policy and the content type for an asset.
-//
-// The entry document names the content-hashed bundle. Embedded files carry no
-// ModTime, so there is nothing for a browser to revalidate against: without
-// the no-cache policy it is free to keep serving an old entry, and therefore
-// an old bundle, after an upgrade. The hashed assets are the opposite — their
-// name changes with their content, so they can be kept forever.
 func applyAssetHeaders(w http.ResponseWriter, name string) {
 	switch {
 	case name == "index.html":
@@ -111,23 +154,7 @@ func applyAssetHeaders(w http.ResponseWriter, name string) {
 
 // serveFile serves `name` from the embedded FS, preferring the pre-compressed
 // variant the client's Accept-Encoding allows.
-//
-// The negotiation is deliberately conservative: brotli only when the client
-// explicitly asks for it, gzip as the widely supported fallback, and the
-// plain file when the client asks for neither. A variant that exists but
-// cannot be opened falls back to the original rather than failing the
-// request — a missing compression variant must never cost the operator their
-// dashboard.
-//
-// The `Vary: Accept-Encoding` header is required: without it a shared cache
-// that stored the brotli variant would hand it to a client that cannot read
-// it.
 func serveFile(w http.ResponseWriter, r *http.Request, subFS fs.FS, name string) {
-	// The response body depends on the request's Accept-Encoding even when no
-	// variant is served: the identity body and the compressed body are
-	// different bytes for the same URL. A shared cache that stored one and
-	// handed it to a client that asked for the other would break the page,
-	// so Vary is set on every path — not only on the compressed one.
 	w.Header().Set("Vary", "Accept-Encoding")
 
 	encoding, variant := negotiateEncoding(r.Header.Get("Accept-Encoding"))
@@ -142,33 +169,6 @@ func serveFile(w http.ResponseWriter, r *http.Request, subFS fs.FS, name string)
 }
 
 // serveVariant writes one file from the embedded FS to the response.
-//
-// It reports whether it wrote the file. When `encoding` is empty the file is
-// written as-is; otherwise it is written with the matching Content-Encoding,
-// which is what tells the browser to decode it.
-//
-// The body goes through http.ServeContent, which is what answers range
-// requests (206, Content-Range, 416) and the conditional requests. The old
-// handler answered ranges too, through http.FileServer; dropping that was a
-// silent regression — a client that asked for part of a file got the whole
-// file with a 200 instead of a 206, and a client that asked past the end got
-// a 200 instead of a 416.
-//
-// ServeContent is handed the *variant's* own size, so a range is resolved
-// against the bytes that are actually on the wire. That matters for a
-// compressed variant: the range is a range of the compressed bytes, which is
-// the representation the client sees.
-//
-// ServeContent refuses to set a Content-Length for a response that carries a
-// Content-Encoding — it cannot know that the length it computed is the
-// length of the compressed body. The result is a chunked response with no
-// length, which costs the browser a chunk header per read. So the length is
-// set here, where the size is known.
-//
-// A range request is the one case where ServeContent sets the length
-// itself, and it sets it to the length of the range rather than of the whole
-// file. Setting it before the call would be wrong for a range, so it is only
-// set when there is no range.
 func serveVariant(w http.ResponseWriter, r *http.Request, subFS fs.FS, name, contentName, encoding string) bool {
 	f, err := subFS.Open(name)
 	if err != nil {
@@ -196,10 +196,6 @@ func serveVariant(w http.ResponseWriter, r *http.Request, subFS fs.FS, name, con
 			return true
 		}
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		// The client can disappear mid-write. The status line and headers are
-		// already on the wire by then, so there is nothing left to report and
-		// no second response to send — the bytes that did arrive are the ones
-		// that count.
 		_, _ = w.Write(data)
 		return true
 	}
@@ -209,6 +205,380 @@ func serveVariant(w http.ResponseWriter, r *http.Request, subFS fs.FS, name, con
 	}
 	http.ServeContent(w, r, contentName, stat.ModTime(), seeker)
 	return true
+}
+
+// Regex patterns for dynamic branding replacement in index.html.
+var (
+	reTitle       = regexp.MustCompile(`(?i)<title>[^<]*</title>`)
+	reAppleTitle  = regexp.MustCompile(`(?i)<meta\s+name=["']apple-mobile-web-app-title["'][^>]*>`)
+	reThemeColor  = regexp.MustCompile(`(?i)<meta\s+name=["']theme-color["'][^>]*>`)
+	reFaviconIco  = regexp.MustCompile(`(?i)<link\s+rel=["']icon["'][^>]*href=["'][^"']*\.ico["'][^>]*>`)
+	reFaviconSvg  = regexp.MustCompile(`(?i)<link\s+rel=["']icon["'][^>]*href=["'][^"']*\.svg["'][^>]*>`)
+	reAppleTouch  = regexp.MustCompile(`(?i)<link\s+rel=["']apple-touch-icon["'][^>]*>`)
+	reDescription = regexp.MustCompile(`(?i)<meta\s+name=["']description["'][^>]*>`)
+	reOG          = regexp.MustCompile(`(?i)<meta\s+property=["']og:[^"']+["'][^>]*>`)
+	reTwitter     = regexp.MustCompile(`(?i)<meta\s+name=["']twitter:[^"']+["'][^>]*>`)
+	reCanonical   = regexp.MustCompile(`(?i)<link\s+rel=["']canonical["'][^>]*>`)
+	reInitScript  = regexp.MustCompile(`(?i)<script>\s*window\.__INITIAL_BRANDING__\s*=\s*[\s\S]*?</script>`)
+)
+
+type cachedPage struct {
+	raw []byte
+	br  []byte
+	gz  []byte
+}
+
+type brandingIndexCache struct {
+	mu    sync.RWMutex
+	pages map[string]cachedPage
+}
+
+func (c *brandingIndexCache) get(key string) (cachedPage, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.pages == nil {
+		return cachedPage{}, false
+	}
+	p, ok := c.pages[key]
+	return p, ok
+}
+
+func (c *brandingIndexCache) set(key string, page cachedPage) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.pages == nil {
+		c.pages = make(map[string]cachedPage)
+	}
+	if len(c.pages) > 20 {
+		c.pages = make(map[string]cachedPage)
+	}
+	c.pages[key] = page
+}
+
+func requestOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Host
+	if host == "" {
+		host = "localhost"
+	}
+	return scheme + "://" + host
+}
+
+func getSettingString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
+func getSettingBool(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
+func hasCustomBranding(settings map[string]any) bool {
+	if settings == nil {
+		return false
+	}
+	return getSettingString(settings, "appName") != "" ||
+		getSettingString(settings, "appSubtitle") != "" ||
+		getSettingString(settings, "appLogoUrl") != "" ||
+		getSettingString(settings, "faviconUrl") != "" ||
+		getSettingString(settings, "loginBgUrl") != "" ||
+		getSettingString(settings, "accentColor") != ""
+}
+
+// injectBranding injects operator branding into the raw index.html document.
+func injectBranding(rawHTML []byte, settings map[string]any, fullURL, origin string) []byte {
+	htmlStr := string(rawHTML)
+
+	appName := getSettingString(settings, "appName")
+	if appName == "" {
+		appName = "9router-go"
+	}
+	appSubtitle := getSettingString(settings, "appSubtitle")
+	appLogoUrl := getSettingString(settings, "appLogoUrl")
+	faviconUrl := getSettingString(settings, "faviconUrl")
+	if faviconUrl == "" {
+		faviconUrl = appLogoUrl
+	}
+	if faviconUrl == "" {
+		faviconUrl = "/favicon.svg"
+	}
+
+	loginBgUrl := getSettingString(settings, "loginBgUrl")
+	accentColor := getSettingString(settings, "accentColor")
+	if accentColor == "" {
+		accentColor = "#0b0e13"
+	}
+
+	pageTitle := appName
+	if appSubtitle != "" {
+		pageTitle = appName + " - " + appSubtitle
+	} else if appName != "9router-go" {
+		pageTitle = appName + " - High-Throughput AI Gateway"
+	} else {
+		pageTitle = "9router-go - High-Throughput AI Gateway"
+	}
+
+	description := appSubtitle
+	if description == "" {
+		description = "High-Throughput AI Gateway - Unified LLM Proxy & Router"
+	}
+
+	imageUrl := loginBgUrl
+	if imageUrl == "" {
+		imageUrl = appLogoUrl
+	}
+	if imageUrl != "" && strings.HasPrefix(imageUrl, "/") && origin != "" {
+		imageUrl = strings.TrimRight(origin, "/") + imageUrl
+	}
+
+	// 1. Replace <title>
+	escapedTitle := html.EscapeString(pageTitle)
+	if reTitle.MatchString(htmlStr) {
+		htmlStr = reTitle.ReplaceAllString(htmlStr, "<title>"+escapedTitle+"</title>")
+	}
+
+	// 2. Replace apple-mobile-web-app-title
+	escapedAppName := html.EscapeString(appName)
+	if reAppleTitle.MatchString(htmlStr) {
+		htmlStr = reAppleTitle.ReplaceAllString(htmlStr, `<meta name="apple-mobile-web-app-title" content="`+escapedAppName+`" />`)
+	}
+
+	// 3. Replace theme-color
+	escapedTheme := html.EscapeString(accentColor)
+	if reThemeColor.MatchString(htmlStr) {
+		htmlStr = reThemeColor.ReplaceAllString(htmlStr, `<meta name="theme-color" content="`+escapedTheme+`" />`)
+	}
+
+	// 4. Update favicon links
+	escapedFav := html.EscapeString(faviconUrl)
+	if faviconUrl != "" && faviconUrl != "/favicon.svg" {
+		favLink := `<link rel="icon" href="` + escapedFav + `" />`
+		if reFaviconIco.MatchString(htmlStr) {
+			htmlStr = reFaviconIco.ReplaceAllString(htmlStr, favLink)
+		}
+		if reFaviconSvg.MatchString(htmlStr) {
+			htmlStr = reFaviconSvg.ReplaceAllString(htmlStr, "")
+		}
+		if reAppleTouch.MatchString(htmlStr) {
+			htmlStr = reAppleTouch.ReplaceAllString(htmlStr, `<link rel="apple-touch-icon" href="`+escapedFav+`" />`)
+		}
+	}
+
+	// 5. Clean up any pre-existing description, OG, Twitter, canonical, or init script
+	htmlStr = reDescription.ReplaceAllString(htmlStr, "")
+	htmlStr = reOG.ReplaceAllString(htmlStr, "")
+	htmlStr = reTwitter.ReplaceAllString(htmlStr, "")
+	htmlStr = reCanonical.ReplaceAllString(htmlStr, "")
+	htmlStr = reInitScript.ReplaceAllString(htmlStr, "")
+
+	// 6. Build meta tags
+	escapedDesc := html.EscapeString(description)
+	var metaBuilder strings.Builder
+	metaBuilder.WriteString("\n    <meta name=\"description\" content=\"" + escapedDesc + "\" />\n")
+	metaBuilder.WriteString("    <meta property=\"og:type\" content=\"website\" />\n")
+	metaBuilder.WriteString("    <meta property=\"og:site_name\" content=\"" + escapedAppName + "\" />\n")
+	metaBuilder.WriteString("    <meta property=\"og:title\" content=\"" + escapedTitle + "\" />\n")
+	metaBuilder.WriteString("    <meta property=\"og:description\" content=\"" + escapedDesc + "\" />\n")
+
+	if imageUrl != "" {
+		escapedImg := html.EscapeString(imageUrl)
+		metaBuilder.WriteString("    <meta property=\"og:image\" content=\"" + escapedImg + "\" />\n")
+		metaBuilder.WriteString("    <meta name=\"twitter:card\" content=\"summary_large_image\" />\n")
+		metaBuilder.WriteString("    <meta name=\"twitter:image\" content=\"" + escapedImg + "\" />\n")
+	} else {
+		metaBuilder.WriteString("    <meta name=\"twitter:card\" content=\"summary\" />\n")
+	}
+
+	metaBuilder.WriteString("    <meta name=\"twitter:title\" content=\"" + escapedTitle + "\" />\n")
+	metaBuilder.WriteString("    <meta name=\"twitter:description\" content=\"" + escapedDesc + "\" />\n")
+
+	if fullURL != "" {
+		escapedURL := html.EscapeString(fullURL)
+		metaBuilder.WriteString("    <meta property=\"og:url\" content=\"" + escapedURL + "\" />\n")
+		metaBuilder.WriteString("    <link rel=\"canonical\" href=\"" + escapedURL + "\" />\n")
+	}
+
+	// 7. Inject window.__INITIAL_BRANDING__
+	initBranding := map[string]any{
+		"appName":                      appName,
+		"appSubtitle":                  appSubtitle,
+		"appLogoUrl":                   appLogoUrl,
+		"faviconUrl":                   faviconUrl,
+		"loginTitle":                   getSettingString(settings, "loginTitle"),
+		"loginSubtitle":                getSettingString(settings, "loginSubtitle"),
+		"loginBgUrl":                   loginBgUrl,
+		"loginBgBlur":                  getSettingBool(settings, "loginBgBlur"),
+		"loginHideDefaultPasswordHint": getSettingBool(settings, "loginHideDefaultPasswordHint"),
+		"hideBrandFooter":              getSettingBool(settings, "hideBrandFooter"),
+		"footerText":                   getSettingString(settings, "footerText"),
+		"accentColor":                  accentColor,
+		"loginCardStyle":               getSettingString(settings, "loginCardStyle"),
+	}
+	if bJSON, err := json.Marshal(initBranding); err == nil {
+		metaBuilder.WriteString("    <script>window.__INITIAL_BRANDING__ = " + string(bJSON) + ";</script>\n")
+	}
+
+	// Insert before </head>
+	if idx := strings.Index(strings.ToLower(htmlStr), "</head>"); idx != -1 {
+		htmlStr = htmlStr[:idx] + metaBuilder.String() + "  " + htmlStr[idx:]
+	} else {
+		htmlStr += metaBuilder.String()
+	}
+
+	return []byte(htmlStr)
+}
+
+func serveDynamicIndex(w http.ResponseWriter, r *http.Request, subFS fs.FS, settingsFn SettingsProvider, cache *brandingIndexCache) {
+	w.Header().Set("Vary", "Accept-Encoding")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	settings := settingsFn()
+	origin := requestOrigin(r)
+	fullURL := origin + r.URL.Path
+
+	cacheKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+		origin,
+		r.URL.Path,
+		getSettingString(settings, "appName"),
+		getSettingString(settings, "appSubtitle"),
+		getSettingString(settings, "appLogoUrl"),
+		getSettingString(settings, "faviconUrl"),
+		getSettingString(settings, "loginBgUrl"),
+		getSettingString(settings, "accentColor"),
+		getSettingString(settings, "loginTitle"),
+		getSettingString(settings, "loginSubtitle"),
+	)
+
+	page, ok := cache.get(cacheKey)
+	if !ok {
+		f, err := subFS.Open("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		rawHTML, err := io.ReadAll(f)
+		_ = f.Close()
+		if err != nil {
+			http.Error(w, "failed to read index.html", http.StatusInternalServerError)
+			return
+		}
+
+		injected := injectBranding(rawHTML, settings, fullURL, origin)
+
+		var brBuf bytes.Buffer
+		brWriter := brotli.NewWriterLevel(&brBuf, brotli.DefaultCompression)
+		_, _ = brWriter.Write(injected)
+		_ = brWriter.Close()
+
+		var gzBuf bytes.Buffer
+		gzWriter, _ := gzip.NewWriterLevel(&gzBuf, gzip.DefaultCompression)
+		_, _ = gzWriter.Write(injected)
+		_ = gzWriter.Close()
+
+		page = cachedPage{
+			raw: injected,
+			br:  brBuf.Bytes(),
+			gz:  gzBuf.Bytes(),
+		}
+		cache.set(cacheKey, page)
+	}
+
+	encoding, _ := negotiateEncoding(r.Header.Get("Accept-Encoding"))
+	var data []byte
+	switch encoding {
+	case "br":
+		w.Header().Set("Content-Encoding", "br")
+		data = page.br
+	case "gzip":
+		w.Header().Set("Content-Encoding", "gzip")
+		data = page.gz
+	default:
+		data = page.raw
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.Header.Get("Range") == "" {
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	}
+	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(data))
+}
+
+func serveDynamicManifest(w http.ResponseWriter, r *http.Request, settings map[string]any) {
+	appName := getSettingString(settings, "appName")
+	if appName == "" {
+		appName = "9router-go"
+	}
+	appSubtitle := getSettingString(settings, "appSubtitle")
+	desc := appSubtitle
+	if desc == "" {
+		desc = "High-throughput AI gateway & infrastructure router in Go"
+	}
+	accentColor := getSettingString(settings, "accentColor")
+	if accentColor == "" {
+		accentColor = "#0b0e13"
+	}
+	fav := getSettingString(settings, "faviconUrl")
+	if fav == "" {
+		fav = getSettingString(settings, "appLogoUrl")
+	}
+
+	manifest := map[string]any{
+		"name":             appName + " - High-Throughput AI Gateway",
+		"short_name":       appName,
+		"description":      desc,
+		"start_url":        "/",
+		"scope":            "/",
+		"display":          "standalone",
+		"background_color": "#0b0e13",
+		"theme_color":      accentColor,
+		"orientation":      "any",
+	}
+
+	icons := []map[string]any{
+		{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+		{"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+		{"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+	}
+	if fav != "" {
+		iconType := "image/png"
+		if strings.HasSuffix(fav, ".svg") {
+			iconType = "image/svg+xml"
+		} else if strings.HasSuffix(fav, ".ico") {
+			iconType = "image/x-icon"
+		}
+		icons = append([]map[string]any{
+			{"src": fav, "sizes": "any", "type": iconType},
+		}, icons...)
+	} else {
+		icons = append([]map[string]any{
+			{"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml"},
+		}, icons...)
+	}
+	manifest["icons"] = icons
+
+	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "no-cache")
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		http.Error(w, "manifest generation error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
 }
 
 // contentTypeFor returns the media type for a served asset.

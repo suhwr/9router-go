@@ -198,6 +198,7 @@
   async function checkAuth() {
     try {
       const authStatus = await api.checkRequireLogin()
+      branding.setBranding(authStatus)
       requireLogin = !!authStatus.requireLogin
       if (requireLogin) {
         // When login is required, only the server-verified session cookie is authoritative.
@@ -553,7 +554,7 @@
           {#if isLoading}
             <div class="flex flex-col items-center justify-center h-[70vh] gap-3 text-text-muted">
               <Loader2 class="w-7 h-7 animate-spin text-brand-500" />
-              <span class="font-code text-xs">Connecting to {settings.appName || 'Gateway'} (:20130)...</span>
+              <span class="font-code text-xs">Connecting to {settings.appName || 'Gateway'}{typeof window !== 'undefined' && window.location.port ? ' (:' + window.location.port + ')' : ''}...</span>
             </div>
           {:else}
             {#if activeTab === 'endpoint'}
