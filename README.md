@@ -10,16 +10,20 @@
 
 **Connect Claude Code, Cursor, Antigravity, Codex, Gemini, OpenCode, Cline, OpenClaw... to 40+ AI providers & 100+ models — no Node.js needed at runtime.**
 
-[![CI](https://github.com/luqman-v1/9router-go/actions/workflows/ci.yml/badge.svg)](https://github.com/luqman-v1/9router-go/actions/workflows/ci.yml)
-[![Release](https://github.com/luqman-v1/9router-go/actions/workflows/release.yml/badge.svg)](https://github.com/luqman-v1/9router-go/actions/workflows/release.yml)
-[![GitHub release](https://img.shields.io/github/v/release/luqman-v1/9router-go)](https://github.com/luqman-v1/9router-go/releases/latest)
-[![License](https://img.shields.io/github/license/luqman-v1/9router-go)](https://github.com/luqman-v1/9router-go/blob/main/LICENSE)
-[![GitHub All Releases](https://img.shields.io/github/downloads/luqman-v1/9router-go/total.svg)](https://github.com/luqman-v1/9router-go/releases)
+[![CI](https://github.com/suhwr/9router-go/actions/workflows/ci.yml/badge.svg)](https://github.com/suhwr/9router-go/actions/workflows/ci.yml)
+[![Release](https://github.com/suhwr/9router-go/actions/workflows/release.yml/badge.svg)](https://github.com/suhwr/9router-go/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/suhwr/9router-go)](https://github.com/suhwr/9router-go/releases/latest)
+[![License](https://img.shields.io/github/license/suhwr/9router-go)](https://github.com/suhwr/9router-go/blob/main/LICENSE)
+[![GitHub All Releases](https://img.shields.io/github/downloads/suhwr/9router-go/total.svg)](https://github.com/suhwr/9router-go/releases)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Group-26A5E1?logo=telegram&logoColor=white)](https://luqman-v1.github.io/9router-go/tg)
 
-[🚀 Quick Start](#-quick-start) • [💡 Features](#-key-features) • [⚙️ Setup](#-setup-guide) • [🔄 Share DB with 9Router](#-sharing-a-database-with-9router) • [🌐 Upstream](https://github.com/decolua/9router)
+[🚀 Quick Start](#-quick-start) • [💡 Features](#-key-features) • [⚙️ Setup](#-setup-guide) • [🔄 Share DB with 9Router](#-sharing-a-database-with-9router) • [🌐 Upstream Go Port](https://github.com/luqman-v1/9router-go) • [🌐 Upstream 9Router](https://github.com/decolua/9router)
 
 </div>
+
+> [!NOTE]
+> **Upstream & Attribution Notice:**
+> This repository (`suhwr/9router-go`) is forked from [`luqman-v1/9router-go`](https://github.com/luqman-v1/9router-go) by Luqman, maintaining full compatibility with the original [9Router](https://github.com/decolua/9router) by Decolua. All upstream architecture, credits, and licensing are fully preserved and acknowledged.
 
 ---
 
@@ -83,18 +87,18 @@ Result: Never stop coding, minimal cost + 20-40% token savings via RTK
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/luqman-v1/9router-go/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/suhwr/9router-go/main/install.sh | bash
 ```
 
 ```powershell
 # Windows (PowerShell — installer writes to %LOCALAPPDATA% + user PATH, no admin needed)
-irm https://raw.githubusercontent.com/luqman-v1/9router-go/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/suhwr/9router-go/main/install.ps1 | iex
 ```
 
 > **CPU without AVX?** Celeron/Pentium N-series, older Atom and some VMs max out at SSE4.2, and an x86-64 binary built for a newer microarchitecture dies with `Illegal instruction` before it starts. Use the no-AVX asset (linux/amd64) instead of the default one:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/luqman-v1/9router-go/main/install-noavx.sh | bash
+> curl -fsSL https://raw.githubusercontent.com/suhwr/9router-go/main/install-noavx.sh | bash
 > ```
 >
 > It installs the same binary from the `9router-go-linux-amd64-noavx` release asset, which is built with `CGO_ENABLED=0` and `GOAMD64=v1`. `VARIANT=noavx` on `install.sh` does the same thing.
@@ -175,7 +179,7 @@ docker run -d --name 9router-go --restart unless-stopped \
 # Linux VPS → linux-amd64 | Raspberry Pi → linux-arm64
 ```
 
-📦 [All release binaries](https://github.com/luqman-v1/9router-go/releases/latest) • 🔨 [Build from source](#-setup-guide)
+📦 [All release binaries](https://github.com/suhwr/9router-go/releases/latest) • 🔨 [Build from source](#-setup-guide)
 
 ---
 
@@ -262,7 +266,7 @@ Full schema, operator contract, and multi-process limits: [`DATABASE.md`](DATABA
 
 ### Release binary
 
-Download from [GitHub Releases](https://github.com/luqman-v1/9router-go/releases/latest), verify against `SHA256SUMS.txt`.
+Download from [GitHub Releases](https://github.com/suhwr/9router-go/releases/latest), verify against `SHA256SUMS.txt`.
 
 ### 🧪 Experimental builds
 
@@ -279,7 +283,7 @@ docker pull luqmenul/9router-go:exp
 
 Opt in only if you want to help shake out bugs. `9router-go update` will not
 install one over a stable release — grab the asset for your platform from the
-[pre-releases page](https://github.com/luqman-v1/9router-go/releases) and
+[pre-releases page](https://github.com/suhwr/9router-go/releases) and
 replace the running binary with it.
 
 ### Build from source
@@ -287,7 +291,7 @@ replace the running binary with it.
 Prerequisites: Go 1.27 and Bun 1.x (dashboard is embedded into the binary, so build web first):
 
 ```bash
-git clone https://github.com/luqman-v1/9router-go.git
+git clone https://github.com/suhwr/9router-go.git
 cd 9router-go
 make web-build   # bun install --frozen-lockfile && bun run build
 make build       # embeds VERSION into the Go binary
@@ -466,10 +470,11 @@ Repository references:
 - [`CHANGELOG.md`](CHANGELOG.md) — release history (Go **v1.9.15**, upstream baseline `decolua/9router`). Work merged since the last tag lives in [`.changes/`](.changes/) and is folded in at the next release; the dashboard's changelog modal shows both. Check what you are running with `9router-go version`.
 - [`docs/TELEGRAM_RELEASE_NOTIFICATIONS.md`](docs/TELEGRAM_RELEASE_NOTIFICATIONS.md) — one-time setup for the release notice posted to Telegram
 
-## Credits
+## Credits & Upstream Attribution
 
-- [9Router](https://github.com/decolua/9router) — original Next.js gateway & dashboard this Go port preserves compatibility with
+- [luqman-v1/9router-go](https://github.com/luqman-v1/9router-go) — Upstream Go implementation & architecture by Luqman
+- [decolua/9router](https://github.com/decolua/9router) — Original Next.js gateway & dashboard
 
 ## 📄 License
 
-MIT License — lihat [`LICENSE`](https://github.com/luqman-v1/9router-go/blob/main/LICENSE).
+MIT License — lihat [`LICENSE`](https://github.com/suhwr/9router-go/blob/main/LICENSE).

@@ -38,25 +38,6 @@
     [...providers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
   )
 
-  let activeCount = $derived.by(() => {
-    let count = 0
-    for (const n of geometry.nodes) {
-      if (n.isActive) count++
-    }
-    return count
-  })
-
-  // Smooth traffic flow status (no frantic BPM jumps)
-  let stageInfo = $derived.by(() => {
-    if (activeCount >= 5) {
-      return { label: 'Peak Flow', color: '#06b6d4' }
-    }
-    if (activeCount >= 1) {
-      return { label: 'Live Routing', color: '#10b981' }
-    }
-    return { label: 'Standby', color: '#64748b' }
-  })
-
   // Container sizing and fitView state
   let containerEl = $state<HTMLDivElement | null>(null)
   let containerWidth = $state(900)
@@ -68,6 +49,9 @@
   let panY = $state(0)
   let isDragging = $state(false)
   let dragStart = { x: 0, y: 0 }
+  let rafMove: number | null = null
+  let pendingPanX = 0
+  let pendingPanY = 0
   let hoveredNodeId = $state<string | null>(null)
 
   // Track image load errors to fallback to initials
@@ -95,21 +79,49 @@
     return { x: cx + dx * s, y: cy + dy * s }
   }
 
-  // 1 SINGLE DETERMINISTIC ORBIT WITH 100% PURE CUBIC BÉZIER CURVES
+  interface StaticLayoutNode extends ProviderNodeItem {
+    pid: string
+    pname: string
+    palias: string
+    isCustomNode: boolean
+    x: number
+    y: number
+    curvePath: string
+    returnPath: string
+    textIcon: string
+    color: string
+  }
+
+  interface LayoutGeometry {
+    rx: number
+    ry: number
+    nodes: StaticLayoutNode[]
+  }
+
+  // 1. PURE STATIC SPATIAL LAYOUT (Memoized by provider signature)
   // - Clean single orbit: symmetrical, spacious, perfectly distributed around center
   // - Pure Cubic Bézier curves with lateral wave offsets (ZERO straight lines, ZERO sharp angles)
   // - 100% stable stationary positions
-  let geometry = $derived.by(() => {
+  // - Trigonometry & SVG paths NEVER recompute during traffic pulses or active requests
+  let cachedLayout: LayoutGeometry | null = null
+  let cachedProviderSignature = ''
+
+  let layout = $derived.by(() => {
     const s = displayProviders.length
     if (s === 0) {
       return { rx: 280, ry: 160, nodes: [] }
+    }
+
+    const sig = displayProviders.map((p) => `${p.id}:${p.name}:${p.color || ''}`).join('|')
+    if (cachedLayout && cachedProviderSignature === sig) {
+      return cachedLayout
     }
 
     // Dynamic ellipse radius based on node count for spacious layout
     const rx = Math.max(280, (190 * s) / (2 * Math.PI))
     const ry = Math.max(165, 0.54 * rx)
 
-    const nodes = displayProviders.map((p, idx) => {
+    const nodes: StaticLayoutNode[] = displayProviders.map((p, idx) => {
       // Deterministic symmetrical angle around single orbit
       const angle = -Math.PI / 2 + (2 * Math.PI * idx) / s
       const x = rx * Math.cos(angle)
@@ -118,65 +130,7 @@
       const pid = p.id.toLowerCase().trim()
       const pname = (p.name || '').toLowerCase().trim()
       const palias = (p.alias || '').toLowerCase().trim()
-
       const isCustomNode = pid.startsWith('openai-compatible-') || pid.startsWith('anthropic-compatible-')
-
-      const isMatch = (target: string) => {
-        if (!target) return false
-        const t = target.toLowerCase().trim()
-
-        // 1. Exact ID or Catalog Alias match
-        if (t === pid || (palias && t === palias)) return true
-
-        // 2. Exact Display Name match
-        if (pname && t === pname) return true
-
-        const isTargetCustom = t.startsWith('openai-compatible-') || t.startsWith('anthropic-compatible-')
-
-        // 3. Strict Boundary Isolation:
-        // A custom compatible target can NEVER match official catalog providers (e.g. 'openai' or 'anthropic')
-        if (isTargetCustom && !isCustomNode) {
-          return false
-        }
-        // An official target ('openai', 'anthropic') can NEVER match a custom compatible node
-        if (!isTargetCustom && isCustomNode && (t === 'openai' || t === 'anthropic')) {
-          return false
-        }
-
-        // 4. Custom Node matching by suffix/UUID
-        if (isCustomNode) {
-          if (pid.endsWith(t) && t.length >= 8) return true
-        }
-
-        return false
-      }
-
-      // Check real-time active in-flight requests
-      let isActive = false
-      for (const r of activeRequests) {
-        if (r?.provider && isMatch(r.provider)) {
-          isActive = true
-          break
-        }
-      }
-
-      // Check live pulses (requests completed in last 2.5s)
-      if (!isActive) {
-        const now = Date.now()
-        for (const [pulsingId, expiry] of Object.entries(activePulseMap)) {
-          if (now < expiry && isMatch(pulsingId)) {
-            isActive = true
-            break
-          }
-        }
-      }
-
-      if (!isActive && pulseProvider && isMatch(pulseProvider)) {
-        isActive = true
-      }
-
-      const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
-      const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
 
       // Exact pixel-perfect border points
       const source = getRectBorderPoint(0, 0, ROUTER_W, ROUTER_H, x, y)
@@ -204,27 +158,118 @@
 
       return {
         ...p,
+        pid,
+        pname,
+        palias,
+        isCustomNode,
         x,
         y,
-        isActive,
-        isLast,
-        isError,
         curvePath,
         returnPath,
         textIcon,
-        color: p.color || '#3b82f6'
+        color: p.color || '#3b82f6',
       }
     })
 
-    return { rx, ry, nodes }
+    cachedProviderSignature = sig
+    cachedLayout = { rx, ry, nodes }
+    return cachedLayout
+  })
+
+  // 2. DYNAMIC ACTIVITY MATCHING (Lightning-fast state evaluation)
+  // Computes active, recent, and error states without recalculating geometry or SVG curve paths
+  let dynamicNodes = $derived.by(() => {
+    const now = Date.now()
+    const activePulseKeys: string[] = []
+    for (const [pulsingId, expiry] of Object.entries(activePulseMap)) {
+      if (now < expiry) activePulseKeys.push(pulsingId)
+    }
+
+    return layout.nodes.map((node) => {
+      const isMatch = (target: string) => {
+        if (!target) return false
+        const t = target.toLowerCase().trim()
+
+        // 1. Exact ID or Catalog Alias match
+        if (t === node.pid || (node.palias && t === node.palias)) return true
+
+        // 2. Exact Display Name match
+        if (node.pname && t === node.pname) return true
+
+        const isTargetCustom = t.startsWith('openai-compatible-') || t.startsWith('anthropic-compatible-')
+
+        // 3. Strict Boundary Isolation:
+        // A custom compatible target can NEVER match official catalog providers
+        if (isTargetCustom && !node.isCustomNode) return false
+        // An official target can NEVER match a custom compatible node
+        if (!isTargetCustom && node.isCustomNode && (t === 'openai' || t === 'anthropic')) return false
+
+        // 4. Custom Node matching by suffix/UUID
+        if (node.isCustomNode && node.pid.endsWith(t) && t.length >= 8) return true
+
+        return false
+      }
+
+      // Check real-time active in-flight requests
+      let isActive = false
+      for (const r of activeRequests) {
+        if (r?.provider && isMatch(r.provider)) {
+          isActive = true
+          break
+        }
+      }
+
+      // Check live pulses (requests completed in last 2.5s)
+      if (!isActive) {
+        for (const pulsingId of activePulseKeys) {
+          if (isMatch(pulsingId)) {
+            isActive = true
+            break
+          }
+        }
+      }
+
+      if (!isActive && pulseProvider && isMatch(pulseProvider)) {
+        isActive = true
+      }
+
+      const isLast = !isActive && Boolean(lastProvider) && isMatch(lastProvider)
+      const isError = !isActive && Boolean(errorProvider) && isMatch(errorProvider)
+
+      return {
+        ...node,
+        isActive,
+        isLast,
+        isError,
+      }
+    })
+  })
+
+  let activeCount = $derived.by(() => {
+    let count = 0
+    for (const n of dynamicNodes) {
+      if (n.isActive) count++
+    }
+    return count
+  })
+
+  // Smooth traffic flow status (no frantic BPM jumps)
+  let stageInfo = $derived.by(() => {
+    if (activeCount >= 5) {
+      return { label: 'Peak Flow', color: '#06b6d4' }
+    }
+    if (activeCount >= 1) {
+      return { label: 'Live Routing', color: '#10b981' }
+    }
+    return { label: 'Standby', color: '#64748b' }
   })
 
   let hasUserInteracted = $state(false)
   let hasAutoFitted = false
 
   function clampPan(x: number, y: number, currentZoom: number = zoom) {
-    const limitX = Math.max(containerWidth * 0.6, geometry.rx * currentZoom * 0.75 + 120)
-    const limitY = Math.max(containerHeight * 0.6, geometry.ry * currentZoom * 0.75 + 100)
+    const limitX = Math.max(containerWidth * 0.6, layout.rx * currentZoom * 0.75 + 120)
+    const limitY = Math.max(containerHeight * 0.6, layout.ry * currentZoom * 0.75 + 100)
     return {
       x: Math.max(-limitX, Math.min(limitX, x)),
       y: Math.max(-limitY, Math.min(limitY, y)),
@@ -235,8 +280,8 @@
     if (!containerWidth || !containerHeight) return
     if (!force && hasUserInteracted) return
 
-    const requiredWidth = 2 * geometry.rx + 240
-    const requiredHeight = 2 * geometry.ry + 140
+    const requiredWidth = 2 * layout.rx + 240
+    const requiredHeight = 2 * layout.ry + 140
     const scaleX = (containerWidth - 36) / requiredWidth
     const scaleY = (containerHeight - 36) / requiredHeight
     zoom = Math.min(1.0, Math.max(0.4, Math.min(scaleX, scaleY)))
@@ -269,7 +314,7 @@
 
   let prevNodeCount = 0
   $effect(() => {
-    const count = geometry.nodes.length
+    const count = layout.nodes.length
     if (count !== prevNodeCount) {
       prevNodeCount = count
       if (!hasUserInteracted) {
@@ -290,6 +335,8 @@
     isDragging = true
     hasUserInteracted = true
     dragStart = { x: e.clientX - panX, y: e.clientY - panY }
+    pendingPanX = panX
+    pendingPanY = panY
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     } catch {}
@@ -300,13 +347,29 @@
     const rawPanX = e.clientX - dragStart.x
     const rawPanY = e.clientY - dragStart.y
     const clamped = clampPan(rawPanX, rawPanY, zoom)
-    panX = clamped.x
-    panY = clamped.y
+    pendingPanX = clamped.x
+    pendingPanY = clamped.y
+
+    if (rafMove === null) {
+      rafMove = requestAnimationFrame(() => {
+        rafMove = null
+        if (isDragging) {
+          panX = pendingPanX
+          panY = pendingPanY
+        }
+      })
+    }
   }
 
   function handlePointerUp(e: PointerEvent) {
+    if (rafMove !== null) {
+      cancelAnimationFrame(rafMove)
+      rafMove = null
+    }
     if (isDragging) {
       isDragging = false
+      panX = pendingPanX
+      panY = pendingPanY
       try {
         ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
       } catch {}
@@ -353,7 +416,10 @@
     })
     observer.observe(containerEl)
     fitView(true)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (rafMove !== null) cancelAnimationFrame(rafMove)
+    }
   })
 </script>
 
@@ -454,29 +520,36 @@
     bind:this={containerEl}
     role="region"
     aria-label="Provider topology map"
-    class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing touch-none"
-    style="background-color: #05070c; background-image: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.04) 0%, transparent 68%), radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 100% 100%, 28px 28px;"
+    class="flex-1 w-full min-w-0 relative overflow-hidden select-none cursor-grab active:cursor-grabbing touch-none bg-[#05070c]"
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
     onpointercancel={handlePointerUp}
     onwheel={handleWheel}
   >
+    <!-- Static background grid & ambient radial glow (isolated GPU layer, zero repaints during drag) -->
+    <div
+      class="absolute inset-0 pointer-events-none"
+      style="background-image: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.04) 0%, transparent 68%), radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 100% 100%, 28px 28px; contain: strict;"
+    ></div>
+
     <!-- Centered Viewport Layer (GPU hardware accelerated) -->
     <div
       class="absolute inset-0 pointer-events-none"
       style="transform: translate3d({containerWidth / 2 + panX}px, {containerHeight / 2 + panY}px, 0) scale3d({zoom}, {zoom}, 1); transform-origin: 0 0; will-change: transform;"
     >
       <!-- SVG Vector Layer for Orbit, Fibers, Idle Traveling Dots & Active Streams -->
-      <svg class="absolute inset-0 overflow-visible pointer-events-none">
+      <svg
+        class="absolute inset-0 overflow-visible pointer-events-none"
+        style="transform: translateZ(0); will-change: transform;"
+        shape-rendering="geometricPrecision"
+      >
         <defs>
-          {#each geometry.nodes as node (node.id)}
-            {#if node.isActive}
-              <linearGradient id="active-beam-{node.id}" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95" />
-                <stop offset="100%" stop-color={node.color || '#22d3ee'} stop-opacity="1" />
-              </linearGradient>
-            {/if}
+          {#each layout.nodes as node (node.id)}
+            <linearGradient id="active-beam-{node.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95" />
+              <stop offset="100%" stop-color={node.color || '#22d3ee'} stop-opacity="1" />
+            </linearGradient>
           {/each}
         </defs>
 
@@ -485,8 +558,8 @@
           <ellipse
             cx="0"
             cy="0"
-            rx={geometry.rx}
-            ry={geometry.ry}
+            rx={layout.rx}
+            ry={layout.ry}
             fill="none"
             stroke="#1e293b"
             stroke-width="1.2"
@@ -496,7 +569,7 @@
         {/if}
 
         <!-- 1. Ambient Connected Fiber Lines: Pure continuous Cubic Bézier curves -->
-        {#each geometry.nodes as node (node.id)}
+        {#each layout.nodes as node (node.id)}
           <path
             d={node.curvePath}
             fill="none"
@@ -504,7 +577,7 @@
             stroke-width={hoveredNodeId === node.id ? '2' : '1.2'}
             stroke-dasharray={hoveredNodeId === node.id ? 'none' : '4 5'}
             opacity={hoveredNodeId === node.id ? '0.9' : '0.4'}
-            class="transition-all duration-300"
+            class="transition-colors duration-300"
           />
         {/each}
 
@@ -526,11 +599,11 @@
         </g>
 
         <!-- 3. Dynamic Streams with Smooth Fade In / Fade Out Transitions -->
-        {#each geometry.nodes as node (node.id)}
+        {#each dynamicNodes as node (node.id)}
           <!-- Active Stream: Neon Glow Aura & Laser Beams (Smooth Fade In & Decay Fade Out) -->
           <g
-            class="pointer-events-none transition-opacity duration-700 ease-out"
-            style="opacity: {node.isActive ? 1 : 0};"
+            class="pointer-events-none transition-all duration-700 ease-out"
+            style="opacity: {node.isActive ? 1 : 0}; visibility: {node.isActive ? 'visible' : 'hidden'};"
           >
             <!-- Wide neon ambient glow aura -->
             <path
@@ -541,23 +614,23 @@
               stroke-opacity="0.32"
               stroke-linecap="round"
             />
-            <!-- Laser forward energy beam -->
+            <!-- Laser forward energy beam (animates only when active) -->
             <path
               d={node.curvePath}
               fill="none"
               stroke="url(#active-beam-{node.id})"
               stroke-width="2.4"
               stroke-linecap="round"
-              class="topology-edge-flow"
+              class={node.isActive ? 'topology-edge-flow' : ''}
             />
-            <!-- Emerald return data stream -->
+            <!-- Emerald return data stream (animates only when active) -->
             <path
               d={node.returnPath}
               fill="none"
               stroke="#10b981"
               stroke-width="1.6"
               stroke-linecap="round"
-              class="topology-edge-flow-reverse"
+              class={node.isActive ? 'topology-edge-flow-reverse' : ''}
             />
 
             <!-- High-energy token packet dots flowing along the active curve (aliran titik lewat) -->
@@ -582,8 +655,8 @@
 
           <!-- Warm Amber Recent Trace (Smooth Fade In / Fade Out) -->
           <g
-            class="pointer-events-none transition-opacity duration-700 ease-out"
-            style="opacity: {!node.isActive && node.isLast ? 0.75 : 0};"
+            class="pointer-events-none transition-all duration-700 ease-out"
+            style="opacity: {!node.isActive && node.isLast ? 0.75 : 0}; visibility: {!node.isActive && node.isLast ? 'visible' : 'hidden'};"
           >
             <path
               d={node.curvePath}
@@ -591,14 +664,14 @@
               stroke="#f59e0b"
               stroke-width="1.8"
               stroke-dasharray="4 4"
-              class="topology-edge-flow"
+              class={!node.isActive && node.isLast ? 'topology-edge-flow' : ''}
             />
           </g>
 
           <!-- Red Error Trace (Smooth Fade In / Fade Out) -->
           <g
-            class="pointer-events-none transition-opacity duration-700 ease-out"
-            style="opacity: {!node.isActive && node.isError ? 0.85 : 0};"
+            class="pointer-events-none transition-all duration-700 ease-out"
+            style="opacity: {!node.isActive && node.isError ? 0.85 : 0}; visibility: {!node.isActive && node.isError ? 'visible' : 'hidden'};"
           >
             <path
               d={node.curvePath}
@@ -613,10 +686,10 @@
 
       <!-- Center Gateway Node (0, 0) - Rock-solid stationary, zero scale twitch -->
       <div
-        class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 pointer-events-auto cursor-pointer transition-all duration-700 ease-out gateway-ambient-glow {activeCount > 0
+        class="absolute z-10 flex items-center justify-center px-4 py-2.5 rounded-2xl border-2 pointer-events-auto cursor-pointer gateway-ambient-glow {activeCount > 0
           ? 'border-sky-400 bg-[#0d1424] text-white shadow-[0_0_22px_rgba(56,189,248,0.4)]'
           : 'border-[#1e293b] bg-[#0c111e] text-slate-100 shadow-[0_0_10px_rgba(56,189,248,0.12)]'}"
-        style="left: 0px; top: 0px; width: {ROUTER_W}px; height: {ROUTER_H}px; transform: translate(-50%, -50%);"
+        style="left: 0px; top: 0px; width: {ROUTER_W}px; height: {ROUTER_H}px; transform: translate(-50%, -50%); transition: background-color 700ms ease-out, border-color 700ms ease-out, box-shadow 700ms ease-out; contain: layout style;"
       >
         <img
           src={branding.config.appLogoUrl || branding.config.faviconUrl || '/favicon.svg'}
@@ -639,14 +712,14 @@
       </div>
 
       <!-- Provider Nodes stationed deterministically along orbit (w=168, h=42) -->
-      {#each geometry.nodes as node (node.id)}
+      {#each dynamicNodes as node (node.id)}
         <div
           role="button"
           tabindex="0"
           onmouseenter={() => (hoveredNodeId = node.id)}
           onmouseleave={() => (hoveredNodeId = null)}
-          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all duration-700 ease-out bg-[#0c101b] shadow-sm hover:scale-105 pointer-events-auto cursor-pointer"
-          style="left: {node.x}px; top: {node.y}px; width: {PROVIDER_W}px; height: {PROVIDER_H}px; transform: translate(-50%, -50%); background-color: {node.isActive
+          class="absolute flex items-center gap-2.5 px-3 py-1.5 rounded-xl border bg-[#0c101b] shadow-sm hover:scale-105 pointer-events-auto cursor-pointer"
+          style="left: {node.x}px; top: {node.y}px; width: {PROVIDER_W}px; height: {PROVIDER_H}px; transform: translate(-50%, -50%); transition: background-color 700ms ease-out, border-color 700ms ease-out, box-shadow 700ms ease-out, transform 200ms ease-out; contain: layout style; background-color: {node.isActive
             ? '#0e182b'
             : node.isLast
               ? '#14141e'

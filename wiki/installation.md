@@ -11,12 +11,12 @@ since: 1.9.14
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/luqman-v1/9router-go/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/suhwr/9router-go/main/install.sh | bash
 ```
 
 ```powershell
 # Windows (PowerShell) — writes to %LOCALAPPDATA% + user PATH, no admin needed
-irm https://raw.githubusercontent.com/luqman-v1/9router-go/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/suhwr/9router-go/main/install.ps1 | iex
 ```
 
 ## Defaults
@@ -101,7 +101,7 @@ install; Docker Hub tags them `exp` (`luqmenul/9router-go:exp`), never `latest`.
 Prerequisites: Go 1.27 and Bun 1.x (the dashboard is embedded into the binary, so build web first).
 
 ```bash
-git clone https://github.com/luqman-v1/9router-go.git
+git clone https://github.com/suhwr/9router-go.git
 cd 9router-go
 make web-build   # bun install --frozen-lockfile && bun run build
 make build       # embeds VERSION into the Go binary

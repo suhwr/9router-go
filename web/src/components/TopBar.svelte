@@ -397,7 +397,7 @@
            reads as a list, which is what these are. -->
       <div class="flex flex-col gap-2.5">
         <a
-          href="https://github.com/luqman-v1/9router-go"
+          href="https://github.com/suhwr/9router-go"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-3 p-3.5 rounded-xl border border-border-subtle bg-surface-2 hover:border-brand-500/40 transition-colors group"
@@ -414,7 +414,7 @@
         </a>
 
         <a
-          href="https://github.com/luqman-v1/9router-go/releases"
+          href="https://github.com/suhwr/9router-go/releases"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-3 p-3.5 rounded-xl border border-border-subtle bg-surface-2 hover:border-pink-500/40 transition-colors group"

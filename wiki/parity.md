@@ -66,8 +66,8 @@ Some features exist only in 9router-go and do not collide with upstream:
 
 ## Further reading
 
-- [`COMPARISON.md`](https://github.com/luqman-v1/9router-go/blob/main/COMPARISON.md)
-- [`PARITY-REMAINING.md`](https://github.com/luqman-v1/9router-go/blob/main/docs/PARITY-REMAINING.md)
+- [`COMPARISON.md`](https://github.com/suhwr/9router-go/blob/main/COMPARISON.md)
+- [`PARITY-REMAINING.md`](https://github.com/suhwr/9router-go/blob/main/docs/PARITY-REMAINING.md)
 - Upstream: [decolua/9router](https://github.com/decolua/9router)
 
 For the KeiRouter port specifically — what was taken, what was skipped, and what

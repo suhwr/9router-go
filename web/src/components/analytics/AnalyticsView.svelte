@@ -349,6 +349,11 @@
 
             try {
               const data = JSON.parse(trimmed.slice(6))
+              let nextRecent = stats.recentRequests
+              let hasRecentChange = false
+              let nextActive = activeRequests
+              let hasActiveChange = false
+
               if (Array.isArray(data.recentRequests) && data.recentRequests.length > 0) {
                 if (streamInitialized) {
                   for (const r of data.recentRequests) {
@@ -378,15 +383,30 @@
                   }
                   streamInitialized = true
                 }
-                stats = { ...stats, recentRequests: mergeRecent(stats.recentRequests, data.recentRequests) }
+                nextRecent = mergeRecent(stats.recentRequests, data.recentRequests)
+                hasRecentChange = true
               }
+
               if (Array.isArray(data.activeRequests)) {
-                activeRequests = data.activeRequests
-                stats = { ...stats, activeRequests: data.activeRequests }
+                nextActive = data.activeRequests
+                hasActiveChange = true
                 if (data.activeRequests.length > 0 && data.activeRequests[0].provider) {
                   lastProvider = data.activeRequests[0].provider
                 }
               }
+
+              if (hasActiveChange) {
+                activeRequests = nextActive
+              }
+
+              if (hasRecentChange || hasActiveChange) {
+                stats = {
+                  ...stats,
+                  ...(hasRecentChange ? { recentRequests: nextRecent } : {}),
+                  ...(hasActiveChange ? { activeRequests: nextActive } : {}),
+                }
+              }
+
               if (data.errorProvider) {
                 errorProvider = data.errorProvider
               }

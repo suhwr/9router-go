@@ -588,7 +588,7 @@ When tasked with syncing a feature, bugfix, or provider from upstream:
    - Set the base explicitly, and pass the repo when creating the PR so a
      mismatched default cannot silently redirect it:
      ```bash
-     gh pr create --repo luqman-v1/9router-go --base main --head fix/<slug> \
+     gh pr create --repo suhwr/9router-go --base main --head fix/<slug> \
        --title "..." --body "..."
      ```
    - **A file that does not exist on `main` blocks the PR, not the branch.** If

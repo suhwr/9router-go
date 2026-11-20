@@ -4,7 +4,7 @@
 # VMs). The default asset is built with the same settings today; this name
 # exists so the choice is explicit and scriptable.
 #
-#   curl -fsSL https://raw.githubusercontent.com/luqman-v1/9router-go/main/install-noavx.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/suhwr/9router-go/main/install-noavx.sh | bash
 #
 # Env overrides are the ones install.sh accepts: VERSION, BINDIR, REPO.
 #
@@ -12,7 +12,7 @@
 # post-install version check live in exactly one place.
 set -euo pipefail
 
-REPO="${REPO:-luqman-v1/9router-go}"
+REPO="${REPO:-suhwr/9router-go}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 
 if [ -n "$here" ] && [ -f "$here/install.sh" ]; then

@@ -125,5 +125,5 @@ rather than configurable. Tune the proxy in front of the gateway instead.
 
 ## Further reading
 
-- [`ARCHITECTURE.md`](https://github.com/luqman-v1/9router-go/blob/main/ARCHITECTURE.md)
-- [`DATABASE.md`](https://github.com/luqman-v1/9router-go/blob/main/DATABASE.md)
+- [`ARCHITECTURE.md`](https://github.com/suhwr/9router-go/blob/main/ARCHITECTURE.md)
+- [`DATABASE.md`](https://github.com/suhwr/9router-go/blob/main/DATABASE.md)

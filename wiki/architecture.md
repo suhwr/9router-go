@@ -68,4 +68,4 @@ Each combo carries its own strategy:
 
 ## Further reading
 
-Full internals: [`ARCHITECTURE.md`](https://github.com/luqman-v1/9router-go/blob/main/ARCHITECTURE.md).
+Full internals: [`ARCHITECTURE.md`](https://github.com/suhwr/9router-go/blob/main/ARCHITECTURE.md).

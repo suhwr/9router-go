@@ -166,5 +166,5 @@ See `.env.example` for the full list.
 
 ## Verifying a release
 
-Download from [GitHub Releases](https://github.com/luqman-v1/9router-go/releases/latest)
+Download from [GitHub Releases](https://github.com/suhwr/9router-go/releases/latest)
 and verify against `SHA256SUMS.txt`.

@@ -30,7 +30,7 @@ make vet-svelte
 
 ## Before writing code
 
-Read [`AGENTS.md`](https://github.com/luqman-v1/9router-go/blob/main/AGENTS.md).
+Read [`AGENTS.md`](https://github.com/suhwr/9router-go/blob/main/AGENTS.md).
 Provider isolation and the Go/Svelte conventions there are enforced by review.
 
 ## Branches and PRs

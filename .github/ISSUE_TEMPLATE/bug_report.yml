@@ -8,8 +8,8 @@ body:
       value: |
         Thanks for filing a bug. The short version: **what did you expect, and what happened instead?**
 
-        Before you open: search the [open issues](https://github.com/luqman-v1/9router-go/issues?q=is%3Aissue%20state%3Aopen)
-        and the [`CHANGELOG.md`](https://github.com/luqman-v1/9router-go/blob/main/CHANGELOG.md) — fixed bugs are often already listed there.
+        Before you open: search the [open issues](https://github.com/suhwr/9router-go/issues?q=is%3Aissue%20state%3Aopen)
+        and the [`CHANGELOG.md`](https://github.com/suhwr/9router-go/blob/main/CHANGELOG.md) — fixed bugs are often already listed there.
 
   - type: textarea
     id: summary

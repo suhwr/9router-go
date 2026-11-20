@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   9router-go one-line installer for Windows: downloads the latest release
   .exe from GitHub, installs it, and prints next steps.
@@ -6,7 +6,7 @@
 .DESCRIPTION
   Run in PowerShell (no admin needed):
 
-    irm https://raw.githubusercontent.com/luqman-v1/9router-go/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/suhwr/9router-go/main/install.ps1 | iex
 
   Optional overrides (set before piping, or pass when saved locally):
 
@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'luqman-v1/9router-go'
+$Repo = 'suhwr/9router-go'
 if ([string]::IsNullOrWhiteSpace($Version)) { $Version = 'latest' }
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
   $InstallDir = Join-Path $env:LOCALAPPDATA '9router-go'
