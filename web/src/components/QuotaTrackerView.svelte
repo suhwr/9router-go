@@ -32,6 +32,7 @@
   import { getIconPath } from './connections/types'
   import EditConnectionModal, { type ConnectionUpdate } from './connections/EditConnectionModal.svelte'
   import QuotaTable from './quota/QuotaTable.svelte'
+  import AddOAuthModal from './quota/AddOAuthModal.svelte'
   import AutoPingScheduleModal, {
     type AutoPingSaveResult,
     type AutoPingSchedule,
@@ -92,9 +93,15 @@
 
   interface Props {
     connections?: ProviderConnection[]
+    onSelectProvider?: (id: string) => void
+    onRefresh?: () => void
   }
 
-  let { connections: initialConns = [] }: Props = $props()
+  let {
+    connections: initialConns = [],
+    onSelectProvider,
+    onRefresh,
+  }: Props = $props()
 
   // ─── State ─────────────────────────────────────────────────────────────────
   let connections = $state<ProviderConnection[]>([])
@@ -110,6 +117,25 @@
   let deletingId = $state<string | null>(null)
   let togglingId = $state<string | null>(null)
   let bulkToggling = $state(false)
+
+  // Layout mode: 'circle' (compact circular radial gauge) vs 'bar' (classic horizontal bar)
+  // Default to 'circle' on mobile/Android or stored preference
+  function initQuotaLayout(): 'circle' | 'bar' {
+    if (typeof window === 'undefined') return 'circle'
+    const stored = localStorage.getItem('quota_layout_mode')
+    if (stored === 'bar' || stored === 'circle') return stored
+    return 'circle'
+  }
+  let quotaLayout = $state<'circle' | 'bar'>(initQuotaLayout())
+
+  function toggleQuotaLayout() {
+    quotaLayout = quotaLayout === 'circle' ? 'bar' : 'circle'
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('quota_layout_mode', quotaLayout)
+    }
+  }
+
+  let showAddOAuthModal = $state(false)
 
   // Filters
   let providerFilter = $state('all')
@@ -1222,7 +1248,45 @@
         </select>
       {/if}
 
+      <!-- Layout Mode Toggle (Circle / Compact vs Bar / Classic) -->
+      <button
+        type="button"
+        onclick={toggleQuotaLayout}
+        class="flex h-8 items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-2 px-2 text-xs text-text-main transition-colors hover:bg-surface-3 cursor-pointer"
+        title="Switch quota view (current: {quotaLayout === 'circle' ? 'Compact Circle' : 'Classic Bar'})"
+        aria-label="Switch quota layout"
+      >
+        <span class="material-symbols-outlined notranslate text-[16px] {quotaLayout === 'circle' ? 'text-brand-500' : 'text-text-muted'}" translate="no">
+          {quotaLayout === 'circle' ? 'donut_large' : 'view_stream'}
+        </span>
+        <span class="hidden sm:inline font-medium">{quotaLayout === 'circle' ? 'Circle' : 'Bar'}</span>
+      </button>
+
+      <!-- Add OAuth Button -->
+      <button
+        type="button"
+        onclick={() => (showAddOAuthModal = true)}
+        class="flex h-8 items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/10 px-2.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition-colors hover:bg-brand-500/20 cursor-pointer shadow-2xs"
+        title="Add OAuth Account"
+      >
+        <span class="material-symbols-outlined notranslate text-[16px]" translate="no">add_circle</span>
+        <span>Add OAuth</span>
+      </button>
+
       <Menu label="Quota tracker actions" triggerIcon="tune" minWidth="17rem">
+        <MenuItem
+          label="Add OAuth account"
+          icon="add_circle"
+          onSelect={() => (showAddOAuthModal = true)}
+        />
+        <MenuItem
+          label={quotaLayout === 'circle' ? 'Switch to Bar layout' : 'Switch to Circle layout'}
+          icon={quotaLayout === 'circle' ? 'view_stream' : 'donut_large'}
+          onSelect={toggleQuotaLayout}
+        />
+
+        <div class="my-1 border-t border-border-subtle" role="separator"></div>
+
         <MenuItem
           label={$emailPrivacy ? 'Show full emails' : 'Mask emails'}
           icon={$emailPrivacy ? 'visibility' : 'visibility_off'}
@@ -1307,13 +1371,15 @@
     <div class="space-y-4">
       {#each groupedConnections as group (group.provider)}
         <section class="space-y-2">
-          <button
-            type="button"
-            onclick={() => toggleProviderGroup(group.provider)}
-            aria-expanded={!groupCollapsed[group.provider]}
-            class="flex w-full items-center justify-between rounded-lg border border-border-subtle/70 bg-surface-2/60 px-3 py-1.5 text-left transition-all hover:bg-surface-2 hover:border-border cursor-pointer shadow-2xs"
+          <div
+            class="flex w-full items-center justify-between rounded-lg border border-border-subtle/70 bg-surface-2/60 px-3 py-1.5 transition-all hover:bg-surface-2 hover:border-border shadow-2xs"
           >
-            <div class="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onclick={() => toggleProviderGroup(group.provider)}
+              aria-expanded={!groupCollapsed[group.provider]}
+              class="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+            >
               <span
                 class="material-symbols-outlined notranslate text-base text-text-muted transition-transform duration-200 {groupCollapsed[
                   group.provider
@@ -1331,11 +1397,29 @@
               >
                 {group.connections.length} {group.connections.length === 1 ? 'account' : 'accounts'}
               </span>
+            </button>
+
+            <div class="flex items-center gap-2 shrink-0">
+              {#if onSelectProvider}
+                <button
+                  type="button"
+                  onclick={() => onSelectProvider?.(group.provider)}
+                  class="flex items-center gap-1 rounded-md border border-brand-500/30 bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-500/20 transition-colors cursor-pointer"
+                  title="Add or connect another account for {providerLabel(group.provider)}"
+                >
+                  <span class="material-symbols-outlined notranslate text-[13px]" translate="no">add</span>
+                  <span>Connect</span>
+                </button>
+              {/if}
+              <button
+                type="button"
+                onclick={() => toggleProviderGroup(group.provider)}
+                class="text-[11px] text-text-muted/70 hidden sm:inline hover:text-text-main cursor-pointer"
+              >
+                {groupCollapsed[group.provider] ? 'Expand' : 'Collapse'}
+              </button>
             </div>
-            <span class="text-[11px] text-text-muted/70 hidden sm:inline">
-              {groupCollapsed[group.provider] ? 'Click to expand' : 'Collapse'}
-            </span>
-          </button>
+          </div>
           {#if !groupCollapsed[group.provider]}
             {#if group.provider === 'claude'}
               <div class="mb-2">
@@ -1590,6 +1674,7 @@
               <QuotaTable
                 quotas={visibleQuotas}
                 compact
+                layoutMode={quotaLayout}
                 sortMode={conn.provider === 'codex' && quotaSortMode !== 'default'
                   ? (quotaSortMode as 'remaining-asc' | 'remaining-desc')
                   : 'default'}
@@ -2002,3 +2087,9 @@
     </div>
   </div>
 {/if}
+
+<AddOAuthModal
+  open={showAddOAuthModal}
+  onClose={() => (showAddOAuthModal = false)}
+  {onSelectProvider}
+/>

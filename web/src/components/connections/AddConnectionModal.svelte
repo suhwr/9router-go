@@ -249,7 +249,7 @@
   /** Compatible nodes carry their pinned model as providerSpecificData.assignedModel. */
   function providerSpecificDataForSave(): Record<string, unknown> | undefined {
     const base = buildProviderSpecificData()
-    const assignedModel = isCompatible ? formDefaultModel.trim() : ''
+    const assignedModel = isCompatible ? (formDefaultModel.trim() || 'auto') : ''
     if (!assignedModel) return base
     return { ...(base || {}), assignedModel }
   }
@@ -403,7 +403,6 @@
     saving ||
       (!isOllamaLocal && !formName.trim()) ||
       (!credentialIsOptional && !formApiKey.trim()) ||
-      (isCompatible && !formDefaultModel.trim()) ||
       (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) ||
       (isCloudflareAi && !cloudflareAccountId.trim()) ||
       // Static mode needs both halves of the key pair; profile mode needs a name to
@@ -430,7 +429,7 @@
         proxyPoolId: formProxyPoolId === NONE_PROXY_POOL_VALUE ? null : formProxyPoolId,
         testStatus: isValid ? 'active' : 'unknown',
         providerSpecificData: providerSpecificDataForSave(),
-        ...(isCompatible ? { defaultModel: formDefaultModel.trim() } : {}),
+        ...(isCompatible ? { defaultModel: formDefaultModel.trim() || 'auto' } : {}),
       })
     } finally {
       saving = false
@@ -952,13 +951,13 @@
             {#if isCompatible}
               <div>
                 <label for="connDefaultModel" class={labelCls}>
-                  Default Model <span class="text-red-500">*</span>
+                  Default Model <span class="text-text-muted text-xs font-normal">(optional, default: auto)</span>
                 </label>
                 <input
                   id="connDefaultModel"
                   type="text"
                   bind:value={formDefaultModel}
-                  placeholder={isAnthropic ? 'claude-3-5-sonnet-latest' : 'gpt-4o-mini'}
+                  placeholder={isAnthropic ? 'auto (e.g. claude-3-5-sonnet-latest)' : 'auto (e.g. gpt-4o-mini)'}
                   class="{inputCls} font-mono"
                 />
               </div>

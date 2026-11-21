@@ -606,6 +606,11 @@
     return oauthLoopbackCallbackURL(window.location.port, window.location.protocol === 'https:')
   }
 
+  function geminiCliCallback(): string {
+    if (typeof window === 'undefined') return 'http://localhost:8080/callback'
+    return oauthLoopbackCallbackURL(window.location.port, window.location.protocol === 'https:')
+  }
+
   function rememberPending(p: { state: string; verifier?: string; redirectUri?: string; extra?: Record<string, string> }) {
     if (typeof window === 'undefined') return
     try {
@@ -1766,7 +1771,8 @@
     callbackInput = ''
     copiedAuthUrl = false
     try {
-      const res = await api.authcodeAuthorize(providerId, dashboardCallback())
+      const callbackUrl = providerId === 'gemini-cli' ? geminiCliCallback() : dashboardCallback()
+      const res = await api.authcodeAuthorize(providerId, callbackUrl)
       oauthAuthUrl = res.url || res.authUrl
       pkceState = res.state || ''
       pkceRedirectUri = res.redirectUri || ''

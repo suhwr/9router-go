@@ -56,7 +56,7 @@
   // preference: the switch that hides a panel outright is the arrangement's own
   // visibility toggle, and that one also skips the combo query below.
   let comboFlowOpen = $state(false)
-  let usageTrendOpen = $state(false)
+  let usageTrendOpen = $state(true)
   // The trend's metric switch lives in the panel header, and the header label
   // describes the active metric — so both the mode and the hourly fact the
   // label repeats are owned here (UsageChart reports the bucket shape back).

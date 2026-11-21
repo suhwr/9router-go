@@ -1,8 +1,7 @@
 <script lang="ts">
-  // Usage trend chart for the Overview section (issue #280: visualization under
-  // Recent Requests, above the usage breakdown filter). Port of
-  // techysy/10router's UsageChart, drawn as plain SVG — the dashboard ships no
-  // chart dependency, matching CacheAnalyticsView / CompressionAnalyticsView.
+  // Usage trend chart for the Overview section.
+  // Drawn as plain SVG with full support for both Tokens and Costs modes,
+  // grid lines with scale reference, and distributed timeline markers.
   import { Loader2 } from 'lucide-svelte'
   import { api } from '../../api/client'
   import { fmtTokens } from '../../lib/compactNumber'
@@ -11,11 +10,10 @@
   interface Props {
     period?: string
     /**
-     * Which stack the chart draws. Owned by the parent because the switch that
-     * picks it sits in the panel header, and the header label describes it.
+     * Which metric the chart draws (tokens or costs).
      */
     viewMode?: 'tokens' | 'costs'
-    /** Whether the buckets are hourly — the same fact the header label needs. */
+    /** Whether the buckets are hourly. */
     hourly?: boolean
   }
 
@@ -45,15 +43,9 @@
 
   const WIDTH = 640
   const HEIGHT = 200
-  // At most six plotted families, mirroring 10router's legend cap so every
-  // plotted color has a named entry and nothing is left unexplained.
   const MAX_SERIES = 6
   const FAMILY_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f43f5e', '#84cc16']
   const OTHER_COLOR = '#64748b'
-
-  // A read that never answers leaves the panel spinning with no way out, so
-  // the wait is bounded: the chart says it could not be loaded, and the
-  // reader collapses and expands the panel to try again.
   const CHART_TIMEOUT_MS = 20000
 
   $effect(() => {
@@ -75,8 +67,6 @@
         settled = true
         clearTimeout(timer)
         buckets = Array.isArray(data) ? data : []
-        // The server buckets hourly for short windows; the header label repeats
-        // that fact, so it is reported rather than re-derived up there.
         hourly = /^\d\d:\d\d$/.test(buckets[0]?.label || '')
         loading = false
       })
@@ -94,13 +84,21 @@
     }
   })
 
-  // Rank families by period total, keep the top six and fold the tail into
-  // "other" so the legend stays bounded.
+  // Rank families by period total based on active viewMode (costs vs tokens)
   const families = $derived.by((): Series[] => {
     const totals = new Map<string, number>()
     for (const b of buckets) {
-      for (const [family, tokens] of Object.entries(b.byModel || {})) {
-        totals.set(family, (totals.get(family) || 0) + (tokens || 0))
+      if (viewMode === 'costs') {
+        const bTokens = b.tokens || 0
+        const bCost = b.cost || 0
+        for (const [family, tokens] of Object.entries(b.byModel || {})) {
+          const famCost = bTokens > 0 ? ((tokens || 0) / bTokens) * bCost : 0
+          totals.set(family, (totals.get(family) || 0) + famCost)
+        }
+      } else {
+        for (const [family, tokens] of Object.entries(b.byModel || {})) {
+          totals.set(family, (totals.get(family) || 0) + (tokens || 0))
+        }
       }
     }
     const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1])
@@ -123,27 +121,37 @@
 
   const keptFamilies = $derived(families.slice(0, MAX_SERIES).map((s) => s.family))
 
-  // Per-bucket stack: cumulative token height of each series, bottom-up.
+  // Per-bucket stack based on viewMode
   const stack = $derived(
     buckets.map((b) => {
-      const values = families.map((s) =>
-        s.family === 'other'
-          ? Object.entries(b.byModel || {})
-              .filter(([family]) => !keptFamilies.includes(family))
-              .reduce((sum, [, t]) => sum + (t || 0), 0)
-          : b.byModel?.[s.family] || 0
-      )
+      const bTokens = b.tokens || 0
+      const bCost = b.cost || 0
+      const values = families.map((s) => {
+        if (s.family === 'other') {
+          const otherTokens = Object.entries(b.byModel || {})
+            .filter(([family]) => !keptFamilies.includes(family))
+            .reduce((sum, [, t]) => sum + (t || 0), 0)
+          return viewMode === 'costs'
+            ? (bTokens > 0 ? (otherTokens / bTokens) * bCost : 0)
+            : otherTokens
+        }
+        const famTokens = b.byModel?.[s.family] || 0
+        return viewMode === 'costs'
+          ? (bTokens > 0 ? (famTokens / bTokens) * bCost : 0)
+          : famTokens
+      })
       const cumulative: number[] = []
       let acc = 0
       for (const v of values) {
         acc += v
         cumulative.push(acc)
       }
-      return { bucket: b, cumulative, total: acc }
+      const bucketTotal = viewMode === 'costs' ? bCost : acc
+      return { bucket: b, cumulative, total: bucketTotal }
     })
   )
 
-  const maxTotal = $derived(Math.max(1, ...stack.map((s) => s.total)))
+  const maxTotal = $derived(Math.max(viewMode === 'costs' ? 0.0001 : 1, ...stack.map((s) => s.total)))
   const hasData = $derived(stack.some((s) => s.total > 0))
   const step = $derived(buckets.length > 1 ? WIDTH / (buckets.length - 1) : WIDTH)
 
@@ -152,20 +160,9 @@
   }
 
   function yAt(value: number): number {
-    return HEIGHT - (value / maxTotal) * HEIGHT
+    return HEIGHT - 20 - (value / maxTotal) * (HEIGHT - 35)
   }
 
-  // One area path per series, bounded by its own cumulative band, so the areas
-  // stack without overlapping.
-  // Arrow keys walk the same points the mouse reveals. A tooltip reachable only
-  // by hovering is unreadable to anyone driving the page from the keyboard, and
-  // the table below is the non-visual equivalent of the drawn series.
-  //
-  // One tab stop, not one per point: the keydown fires on the focused element,
-  // so a per-point binding always reads its own index and ArrowRight moves the
-  // tooltip without moving focus — the second press computes the same index
-  // again. Focus follows the arrow instead, and the point that is focused is
-  // the only one with tabindex 0.
   let focusedPoint = $state(0)
 
   function handlePointKey(event: KeyboardEvent) {
@@ -185,16 +182,11 @@
     next = Math.max(0, Math.min(stack.length - 1, next))
     focusedPoint = next
     hovered = next
-    // Focus moves with the tooltip. The tabindex re-render lands on the next
-    // microtask, so the lookup is deferred rather than done inline.
     const el = event.currentTarget as SVGElement
     const svg = el.ownerSVGElement
     svg?.querySelectorAll<SVGRectElement>('rect')?.[next]?.focus()
   }
 
-  // The table lives inside <details>, which hides its rows visually but still
-  // builds them. An all-time window is thousands of buckets, so one <tr> and
-  // three cells per bucket is a cost a 1-vCPU box pays while the table is shut.
   let tableOpen = $state(false)
 
   function areaPath(band: number): string {
@@ -208,6 +200,22 @@
       })
       .join(' L ')
     return `M ${top} L ${bottom} Z`
+  }
+
+  // Generate 4-6 evenly spaced X-axis timeline tick indices
+  const xTickIndices = $derived.by((): number[] => {
+    if (buckets.length <= 1) return [0]
+    if (buckets.length <= 6) return buckets.map((_, i) => i)
+    const count = 5
+    const indices: number[] = []
+    for (let i = 0; i < count; i++) {
+      indices.push(Math.round((i * (buckets.length - 1)) / (count - 1)))
+    }
+    return indices
+  })
+
+  function formatValue(v: number): string {
+    return viewMode === 'costs' ? costIn(v) : fmtTokens(v)
   }
 </script>
 
@@ -223,18 +231,36 @@
     <div class="py-10 text-center text-xs text-text-muted">No usage recorded in this period.</div>
   {:else}
     <div class="min-w-0">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} class="w-full h-auto" role="img" aria-label="Usage trend chart">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} class="w-full h-auto overflow-visible" role="img" aria-label="Usage trend chart">
+        <!-- Horizontal Grid Lines and Y-Axis Scale Reference -->
+        <g class="text-[10px] fill-text-muted/60 stroke-border-subtle/50 font-mono" stroke-dasharray="3 3">
+          <!-- Top line 100% -->
+          <line x1="0" y1={yAt(maxTotal)} x2={WIDTH} y2={yAt(maxTotal)} />
+          <text x="4" y={Math.max(yAt(maxTotal) - 4, 10)} fill="currentColor" stroke="none">{formatValue(maxTotal)}</text>
+          
+          <!-- Middle line 50% -->
+          <line x1="0" y1={yAt(maxTotal / 2)} x2={WIDTH} y2={yAt(maxTotal / 2)} />
+          <text x="4" y={yAt(maxTotal / 2) - 4} fill="currentColor" stroke="none">{formatValue(maxTotal / 2)}</text>
+          
+          <!-- Baseline 0 -->
+          <line x1="0" y1={HEIGHT - 20} x2={WIDTH} y2={HEIGHT - 20} stroke-dasharray="none" class="stroke-border/70" />
+          <text x="4" y={HEIGHT - 24} fill="currentColor" stroke="none">0</text>
+        </g>
+
+        <!-- Stacked Areas -->
         {#each families as s, band (s.family)}
-          <path d={areaPath(band)} fill={s.color} fill-opacity="0.45" stroke={s.color} stroke-width="1" />
+          <path d={areaPath(band)} fill={s.color} fill-opacity="0.45" stroke={s.color} stroke-width="1.5" />
         {/each}
+
+        <!-- Interactive Columns -->
         {#each stack as _point, i}
           <rect
             tabindex={i === focusedPoint ? 0 : -1}
-            aria-label="{stack[i].bucket.label}: {fmtTokens(stack[i].bucket.tokens)} tokens"
+            aria-label="{stack[i].bucket.label}: {formatValue(stack[i].total)}"
             x={xAt(i) - step / 2}
             y="0"
             width={step}
-            height={HEIGHT}
+            height={HEIGHT - 20}
             fill="transparent"
             onmouseenter={() => (hovered = i)}
             onmouseleave={() => (hovered = null)}
@@ -246,69 +272,90 @@
             onkeydown={handlePointKey}
           />
         {/each}
+
+        <!-- Hover Indicator Line -->
         {#if hovered !== null && stack[hovered]}
           <line
             x1={xAt(hovered)}
             x2={xAt(hovered)}
             y1="0"
-            y2={HEIGHT}
+            y2={HEIGHT - 20}
             stroke="currentColor"
             stroke-width="1"
             stroke-dasharray="3 3"
-            opacity="0.35"
+            opacity="0.5"
           />
         {/if}
       </svg>
+
+      <!-- Hover Tooltip -->
       {#if hovered !== null && stack[hovered]}
-        <!-- role=status so a screen reader hears the point the keyboard just
-             moved to; the same node is the pointer tooltip. -->
+        {@const b = stack[hovered].bucket}
         <div
           role="status"
           aria-live="polite"
-          class="mt-2 rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-main"
+          class="mt-2.5 rounded-xl border border-border bg-surface-2 p-3 text-xs text-text-main shadow-md"
         >
-          <div class="font-semibold text-text-muted">{stack[hovered].bucket.label}</div>
-          <div class="mt-1 flex items-center justify-between gap-3">
-            <span>Tokens</span>
-            <span class="font-mono font-bold">{fmtTokens(stack[hovered].bucket.tokens)}</span>
+          <div class="flex items-center justify-between pb-1.5 border-b border-border-subtle/70 mb-2">
+            <span class="font-bold text-text-main flex items-center gap-1.5">
+              <span class="material-symbols-outlined notranslate text-[14px] text-text-muted" translate="no">calendar_today</span>
+              {b.label}
+            </span>
+            <span class="font-mono font-bold {viewMode === 'costs' ? 'text-amber-500' : 'text-brand-500'}">
+              {viewMode === 'costs' ? costIn(b.cost ?? 0) : `${fmtTokens(b.tokens)} tokens`}
+            </span>
           </div>
-          <div class="flex items-center justify-between gap-3 text-warning">
-            <span>Est. cost</span>
-            <span class="font-mono font-bold">~{costIn(stack[hovered].bucket.cost ?? 0)}</span>
+          <div class="grid grid-cols-2 gap-2 text-[11px] mb-2 font-mono">
+            <div class="flex justify-between bg-surface/70 px-2 py-1 rounded-md border border-border-subtle/50">
+              <span class="text-text-muted">Total tokens:</span>
+              <span class="font-bold">{fmtTokens(b.tokens)}</span>
+            </div>
+            <div class="flex justify-between bg-surface/70 px-2 py-1 rounded-md border border-border-subtle/50">
+              <span class="text-text-muted">Est. cost:</span>
+              <span class="font-bold text-warning">~{costIn(b.cost ?? 0)}</span>
+            </div>
           </div>
-          {#each families as s, band (s.family)}
-            {@const value = stack[hovered].cumulative[band] - (band > 0 ? stack[hovered].cumulative[band - 1] : 0)}
-            {#if value > 0}
-              <div class="flex items-center justify-between gap-3">
-                <span class="flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-sm" style="background: {s.color}"></span>
-                  {s.family}
-                </span>
-                <span class="font-mono">{fmtTokens(value)}</span>
-              </div>
-            {/if}
-          {/each}
+          {#if families.length > 0}
+            <div class="space-y-1 pt-1 border-t border-border-subtle/50">
+              {#each families as s, band (s.family)}
+                {@const val = stack[hovered].cumulative[band] - (band > 0 ? stack[hovered].cumulative[band - 1] : 0)}
+                {#if val > 0}
+                  <div class="flex items-center justify-between gap-3 text-[11px]">
+                    <span class="flex items-center gap-1.5 truncate">
+                      <span class="w-2.5 h-2.5 rounded-xs shrink-0" style="background: {s.color}"></span>
+                      <span class="truncate">{s.family}</span>
+                    </span>
+                    <span class="font-mono text-text-muted shrink-0">{formatValue(val)}</span>
+                  </div>
+                {/if}
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
 
+    <!-- Timeline Labels (Distributed) -->
+    <div class="flex justify-between items-center text-[10px] text-text-muted font-mono pt-1 px-1">
+      {#each xTickIndices as idx}
+        <span>{buckets[idx]?.label || ''}</span>
+      {/each}
+    </div>
+
+    <!-- Series Legend & Peak -->
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-muted pt-2 border-t border-border-subtle">
       {#each families as s (s.family)}
         <span class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 rounded-sm" style="background: {s.color}"></span>
+          <span class="w-2.5 h-2.5 rounded-xs" style="background: {s.color}"></span>
           {s.family}
         </span>
       {/each}
-      <span class="ml-auto font-mono">Peak {fmtTokens(maxTotal)}</span>
+      <span class="ml-auto font-mono font-semibold text-text-main">
+        Peak: {formatValue(maxTotal)}
+      </span>
     </div>
 
-    <div class="flex justify-between text-[10px] text-text-subtle">
-      <span>{buckets[0]?.label}</span>
-      <span>{buckets[buckets.length - 1]?.label}</span>
-    </div>
-
-    <!-- The drawn areas carry no text a screen reader can read and the tooltip
-         only opens under a pointer, so the same numbers are here as a table. -->
+    <!-- Tabular Breakdown -->
     <details class="text-[11px] text-text-muted" bind:open={tableOpen}>
       <summary class="cursor-pointer select-none">View table</summary>
       {#if tableOpen}
@@ -321,11 +368,6 @@
             </tr>
           </thead>
           <tbody>
-            <!-- The label is not a unique key: a daily bucket is labelled "Jan 2",
-                 so a period long enough to cross a year boundary repeats it and
-                 Svelte throws each_key_duplicate, which takes the usage page
-                 down with it. The index is the key here — the same choice the
-                 plotted points above make — and it is unique by construction. -->
             {#each stack as point, i (i)}
               <tr class="border-b border-border-subtle/60">
                 <th scope="row" class="py-1 pr-2 font-normal text-text-main">{point.bucket.label}</th>

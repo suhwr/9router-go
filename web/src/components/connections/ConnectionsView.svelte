@@ -72,6 +72,17 @@
           )
         }
       }
+      // Automatically register a default "auto" model so the compatible provider is ready immediately
+      try {
+        await api.saveCustomModel(`${data.prefix}/auto`, {
+          id: 'auto',
+          providerAlias: data.prefix,
+          type: 'chat',
+          name: 'Auto Model',
+        })
+      } catch {
+        /* non-fatal fallback */
+      }
       showAddNodeModal = false
       onRefresh()
       selectedProviderId = node.id

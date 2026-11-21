@@ -99,6 +99,19 @@ func (h *OAuthHandler) HandleAuthCodeAuthorize(w http.ResponseWriter, r *http.Re
 	}
 	clientID, _ := cfg.creds()
 	redirectURI := callbackRedirectURI(r)
+	if provider == "gemini-cli" && clientID == cfg.clientID {
+		// When using the default Google Desktop OAuth client (681255809395),
+		// Google strictly requires a loopback redirect_uri (http://localhost:... or http://127.0.0.1:...).
+		// Any external domain or https scheme triggers Google's "Error 400: redirect_uri_mismatch".
+		if !strings.HasPrefix(redirectURI, "http://localhost") && !strings.HasPrefix(redirectURI, "http://127.0.0.1") {
+			host := requestHost(r)
+			port := ""
+			if idx := strings.LastIndex(host, ":"); idx != -1 {
+				port = host[idx:]
+			}
+			redirectURI = "http://localhost" + port + "/callback"
+		}
+	}
 	state := r.URL.Query().Get("state")
 	if state == "" {
 		state = randomString(32)
@@ -154,6 +167,16 @@ func (h *OAuthHandler) HandleAuthCodeExchange(w http.ResponseWriter, r *http.Req
 	}
 	redirectURI := exchangeRedirectURI(r, body.RedirectURI, body.RedirectUri)
 	clientID, clientSecret := cfg.creds()
+	if body.Provider == "gemini-cli" && clientID == cfg.clientID {
+		if !strings.HasPrefix(redirectURI, "http://localhost") && !strings.HasPrefix(redirectURI, "http://127.0.0.1") {
+			host := requestHost(r)
+			port := ""
+			if idx := strings.LastIndex(host, ":"); idx != -1 {
+				port = host[idx:]
+			}
+			redirectURI = "http://localhost" + port + "/callback"
+		}
+	}
 
 	form := url.Values{
 		"grant_type":   {"authorization_code"},
