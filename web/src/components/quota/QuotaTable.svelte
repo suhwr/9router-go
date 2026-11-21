@@ -150,7 +150,7 @@
       {/if}
     </div>
 
-    <div class="space-y-1">
+    <div class={layoutMode === 'circle' ? 'flex flex-wrap gap-1.5' : 'space-y-1'}>
       {#each sortedQuotas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) as quota (
         `${quota.name}-${quota.index}`
       )}
@@ -175,10 +175,10 @@
 
         {#if layoutMode === 'circle'}
           <div
-            class="group/row flex items-center gap-2 rounded-lg border border-border/70 bg-surface/80 px-2.5 py-1.5 transition-all hover:bg-surface-2 hover:border-border shadow-2xs"
+            class="group/row relative flex flex-1 basis-[132px] min-w-[132px] items-center gap-1.5 rounded-lg border border-border/70 bg-surface/80 px-2 py-1.5 transition-all hover:bg-surface-2 hover:border-border shadow-2xs"
           >
             <!-- Circular SVG Gauge -->
-            <div class="relative size-8.5 shrink-0 flex items-center justify-center">
+            <div class="relative size-8 shrink-0 flex items-center justify-center">
               <svg class="size-full -rotate-90" viewBox="0 0 36 36">
                 <circle
                   cx="18"
@@ -228,37 +228,47 @@
               </div>
             </div>
 
-            <!-- Content: Name on top row, numbers & timer on second row -->
+            <!-- Content: Name on top, timer & usage below -->
             <div class="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
               <div class="flex items-center justify-between gap-1 min-w-0">
-                <span class="text-xs font-semibold text-text-main truncate" title={quota.name}>
+                <span class="text-[11px] font-semibold text-text-main truncate leading-tight" title={quota.name}>
                   {quota.name}
                 </span>
                 {#if typeof onHideQuota === 'function'}
                   <button
                     type="button"
                     onclick={() => onHideQuota?.(quota)}
-                    class="inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded text-text-muted/50 opacity-0 group-hover/row:opacity-100 hover:opacity-100 transition-opacity hover:bg-surface-3 hover:text-text-main cursor-pointer"
+                    class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted/50 opacity-0 group-hover/row:opacity-100 focus:opacity-100 transition-opacity hover:bg-surface-3 hover:text-text-main cursor-pointer"
                     title="Hide this quota row"
                     aria-label="Hide quota {quota.name}"
                   >
-                    <span class="material-symbols-outlined notranslate text-[12px]" translate="no">visibility_off</span>
+                    <span class="material-symbols-outlined notranslate text-[11px]" translate="no">visibility_off</span>
                   </button>
                 {/if}
               </div>
 
-              <div class="flex items-center justify-between gap-1 text-[10px] text-text-muted font-mono leading-none">
-                <span class="truncate">
-                  {isUnlimited
-                    ? `${fmtNum(quota.used)} used`
-                    : isCreditBalance
-                      ? `Credit: ${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
-                      : `${fmtNum(quota.used)} / ${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
-                </span>
-                {#if (countdown !== '-' || resetDisplay)}
-                  <span class="inline-flex items-center gap-0.5 text-[9px] font-sans font-medium text-text-muted shrink-0" title={countdownLabel}>
-                    <span class="material-symbols-outlined notranslate text-[11px] opacity-60" translate="no">schedule</span>
-                    <span>{countdown !== '-' ? countdownLabel : resetDisplay}</span>
+              <div class="flex items-center justify-between gap-1 text-[9.5px] text-text-muted leading-none min-w-0">
+                {#if countdown !== '-' || resetDisplay}
+                  <span class="inline-flex items-center gap-0.5 font-sans font-medium truncate" title={countdownLabel}>
+                    <span class="material-symbols-outlined notranslate text-[10px] opacity-60 shrink-0" translate="no">schedule</span>
+                    <span class="truncate">{countdown !== '-' ? countdown : resetDisplay}</span>
+                  </span>
+                {:else}
+                  <span class="font-mono truncate">
+                    {isUnlimited
+                      ? `${fmtNum(quota.used)} used`
+                      : isCreditBalance
+                        ? `${(quota.total || 0).toFixed(2)} ${quota.currency || ''}`
+                        : `${fmtNum(quota.used)}/${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
+                  </span>
+                {/if}
+                {#if (countdown !== '-' || resetDisplay) && ((quota.total || 0) > 0 || (quota.used || 0) > 0 || isCreditBalance)}
+                  <span class="font-mono text-[9px] opacity-75 shrink-0">
+                    {isUnlimited
+                      ? `${fmtNum(quota.used)}`
+                      : isCreditBalance
+                        ? `${(quota.total || 0).toFixed(2)}`
+                        : `${fmtNum(quota.used)}/${(quota.total || 0) > 0 ? fmtNum(quota.total) : '∞'}`}
                   </span>
                 {/if}
               </div>
